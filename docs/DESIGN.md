@@ -1,6 +1,6 @@
 # Vanshview: Design and User Flows
 
-Companion to `SPEC.md`. The spec says what the system does. This doc says how it should feel and how people move through it. If the two conflict, raise it; don't silently pick one.
+Companion to `SPEC.md`. Visual mock: https://claude.ai/artifact/UephL1aE7ZJkYVMYBCmpZr (private). The spec says what the system does. This doc says how it should feel and how people move through it. If the two conflict, raise it; don't silently pick one.
 
 ---
 
@@ -39,8 +39,8 @@ Two things follow from this:
 Target: **under 3 minutes from landing page to a tree of 7+ people.**
 
 ```
-Landing → Email → OTP code (6 digits, not just a magic link — the
-link breaks when someone opens mail on their phone but uses the app on a laptop)
+Landing → Phone number → 6-digit SMS code (WhatsApp as fallback channel;
+email code available as a secondary option)
   → "What should we call this family?"   [Malhotra family]
   → "Start with you"                      name · location · phone
   → "Your parents"                        two cards, side by side
@@ -180,16 +180,18 @@ Scale: 12 / 13 / 14 (base UI) / 16 / 20 / 28. Names on nodes are 14px serif and 
 
 | Token | Value | Use |
 | --- | --- | --- |
-| `--paper` | `#F6F3EC` | App background, warm and off-white |
-| `--surface` | `#FCFBF8` | Sheets, nodes |
-| `--ink` | `#1C1A17` | Primary text |
-| `--ink-muted` | `#6B655C` | Secondary text, years |
-| `--rule` | `#DDD6CA` | Hairlines, edges |
+| `--ground` | `#F3F4F2` | App background, neutral (deliberately not cream) |
+| `--surface` | `#FFFFFF` | Sheets, nodes |
+| `--ink` | `#16181B` | Primary text |
+| `--ink-muted` | `#5F6368` | Secondary text, years |
+| `--rule` | `#E1E2DE` | Hairlines; edges use `#BFC1BC` |
 | `--accent` | `#2F4A7A` (neel / indigo ink) | Primary actions and focus ring. Used rarely |
 | `--danger` | `#9A3412` | Destructive only |
-| `--unknown` | `#A8A29E` | "Unknown" bucket in every colour mode |
+| `--unknown` | `#B5B8B4` | "Unknown" bucket in every colour mode |
 
-Dark mode is a warm charcoal (`#161513` paper, `#1F1D1A` surface), not blue-black.
+Dark mode is a neutral charcoal (`#141516` ground, `#1C1D1F` surface), not blue-black.
+
+Data palette (categorical): `#C98A2B` `#1E6B66` `#A8452F` `#5B78B0` `#6E7F2E` `#7C4D7A`, unknown `#B5B8B4`. Indigo is never a data colour.
 
 **Data palettes** (colour modes) are separate from the chrome. Categorical: 8 muted, equal-lightness hues validated for colour-blind contrast. Sequential (generation, decade): single-hue ramp in indigo. Diverging (paternal vs maternal): indigo ↔ terracotta with neutral in the middle.
 
@@ -203,7 +205,7 @@ Dark mode is a warm charcoal (`#161513` paper, `#1F1D1A` surface), not blue-blac
 │▌ ~1930 – 2009 · Amritsar   ← mono 12 muted
 └▌─────────────────────┘
  ↑ 4px colour-mode bar (branch / generation / location …)
-   second branch = thin 2px outer ring in the secondary colour
+   in two branches = bar split 60/40, dominant on top
 ```
 
 | State | Treatment |
@@ -233,8 +235,8 @@ Dark mode is a warm charcoal (`#161513` paper, `#1F1D1A` surface), not blue-blac
 
 | # | Spec says | Problem | Recommendation |
 | --- | --- | --- | --- |
-| 1 | Phone **required** for every living adult (DB CHECK) | The keeper adding 20 relatives won't know 20 numbers. People will type `9999999999` to get past the form, which poisons phone dedup, our strongest signal. | Require phone for **the submitter and claimed persons**. For everyone else it's strongly encouraged, with "Don't have it, ask later". That sets `phone_status = 'requested'`, shows on the person as "Number missing · Ask on WhatsApp", and counts in data_issues. The CHECK becomes `phone IS NOT NULL OR phone_status <> 'required'`. |
-| 2 | Magic link auth | It breaks across devices (mail on phone, app on laptop) | Email OTP code as primary, magic link as a fallback in the same email |
+| 1 | **DECIDED:** phone stays required for living adults; for anyone other than the submitter / claimed person, "Ask later" is allowed and sets `phone_status = 'requested'`. Original concern: | The keeper adding 20 relatives won't know 20 numbers. People will type `9999999999` to get past the form, which poisons phone dedup, our strongest signal. | Require phone for **the submitter and claimed persons**. For everyone else it's strongly encouraged, with "Don't have it, ask later". That sets `phone_status = 'requested'`, shows on the person as "Number missing · Ask on WhatsApp", and counts in data_issues. The CHECK becomes `phone IS NOT NULL OR phone_status <> 'required'`. |
+| 2 | **DECIDED:** phone number + SMS OTP is primary sign-in (WhatsApp fallback, email secondary). Original concern with magic link: | It breaks across devices (mail on phone, app on laptop) | Email OTP code as primary, magic link as a fallback in the same email |
 | 3 | Onboarding is not specified | Two parallel paths (graph clicks and wizard) for first run | First run = wizard anchored on self (§3.1) |
 | 4 | Wizard step 1 asks for many optional fields | Slows down the one moment that must be fast | Step 1 is name, location and phone, nothing else visible. "More" lives on the person later |
 | 5 | Placeholder sibling parent: unspecified count | One placeholder makes siblings derive as half | Two placeholders in one union |
