@@ -1,9 +1,9 @@
 name: CI
 
+# Every branch push (PR checks attach to the head commit, so pull_request is not needed).
 on:
   push:
-    branches: [main]
-  pull_request:
+    branches: ["**"]
   workflow_dispatch:
 
 concurrency:
