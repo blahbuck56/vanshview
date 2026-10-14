@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  app:
+    name: App (lint, typecheck, unit tests, build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+
+  database:
+    name: Database (migrations, seed, pgTAP, lint, types)
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Start Supabase Postgres
+        run: pnpm supabase db start
+
+      - name: supabase db reset (clean rebuild from migrations + seed)
+        run: pnpm supabase db reset --local
+
+      - name: pgTAP (constraints, derived queries, RLS per role)
+        run: pnpm supabase test db
+
+      - name: Lint database functions (plpgsql_check)
+        run: pnpm supabase db lint --local --level warning --fail-on error
+
+      - name: Generated types match the schema
+        run: |
+          pnpm -s db:types
+          git diff --exit-code -- types/database.ts \
+            || (echo "::error::types/database.ts is stale. Run 'pnpm db:types' and commit." && exit 1)
+
+      - name: Supabase logs on failure
+        if: failure()
+        run: docker logs supabase_db_vanshview 2>&1 | tail -200 || true

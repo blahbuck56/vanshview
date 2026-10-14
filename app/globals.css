@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+/* Design tokens from docs/DESIGN.md §4.2. Interface colours stay neutral so colour on the
+   tree always means data; indigo is for actions and focus only, never a data colour. */
+:root {
+  --ground: #f3f4f2;
+  --surface: #ffffff;
+  --ink: #16181b;
+  --ink-muted: #5f6368;
+  --rule: #e1e2de;
+  --edge: #bfc1bc;
+  --accent: #2e4a86;
+  --accent-soft: #e8edf7;
+  --danger: #9a3412;
+  --unknown: #b5b8b4;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground: #141516;
+    --surface: #1c1d1f;
+    --ink: #ececea;
+    --ink-muted: #a4a7ab;
+    --rule: #2e3033;
+    --edge: #4a4d51;
+    --accent: #8ea8de;
+    --accent-soft: #23304a;
+    --danger: #f0a07a;
+    --unknown: #6e716f;
+  }
+}
+
+:root[data-theme="dark"] {
+  --ground: #141516;
+  --surface: #1c1d1f;
+  --ink: #ececea;
+  --ink-muted: #a4a7ab;
+  --rule: #2e3033;
+  --edge: #4a4d51;
+  --accent: #8ea8de;
+  --accent-soft: #23304a;
+  --danger: #f0a07a;
+  --unknown: #6e716f;
+}
+
+@theme inline {
+  --color-ground: var(--ground);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-rule: var(--rule);
+  --color-edge: var(--edge);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-danger: var(--danger);
+  --color-unknown: var(--unknown);
+
+  /* Categorical data palette (branches, locations). */
+  --color-data-1: #c98a2b;
+  --color-data-2: #1e6b66;
+  --color-data-3: #a8452f;
+  --color-data-4: #5b78b0;
+  --color-data-5: #6e7f2e;
+  --color-data-6: #7c4d7a;
+
+  --font-sans: "IBM Plex Sans", "IBM Plex Sans Devanagari", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "IBM Plex Serif", "Noto Serif Devanagari", ui-serif, Georgia, serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  --radius-sm: 4px;
+  --radius-md: 5px;
+  --radius-lg: 8px;
+}
+
+body {
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+}
