@@ -20,6 +20,10 @@ const eslintConfig = [
       "next-env.d.ts",
     ],
   },
+  {
+    // Copy uses plain apostrophes ("Don't know"); React renders them correctly.
+    rules: { "react/no-unescaped-entities": "off" },
+  },
 ];
 
 export default eslintConfig;

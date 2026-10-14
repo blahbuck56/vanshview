@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(16);
+select plan(17);
 
 create function pg_temp.sid(k text) returns uuid language sql immutable as $$
   select md5('vanshview:' || k)::uuid
@@ -32,6 +32,12 @@ select is(
   (select count(*)::int from pg_proc p
    where p.pronamespace = 'public'::regnamespace and has_function_privilege('anon', p.oid, 'execute')),
   0, 'anon cannot execute any public function');
+
+select ok(
+  not has_function_privilege('authenticated', 'public.refresh_minor_flags()', 'execute')
+  and not has_function_privilege('authenticated', 'public.log_change()', 'execute')
+  and has_function_privilege('authenticated', 'public.add_parent(uuid, jsonb, uuid, public.parent_child_kind, boolean, public.union_kind)', 'execute'),
+  'signed-in users can call app functions but not internal ones (trigger functions, scheduled jobs)');
 
 select ok(
   (select count(*) from public.persons p

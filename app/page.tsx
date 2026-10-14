@@ -1,8 +1,15 @@
-export default function Home() {
-  return (
-    <main className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-3 px-4">
-      <h1 className="font-serif text-3xl font-semibold tracking-tight">Vanshview</h1>
-      <p className="text-ink-muted">Your family, in one place. Private to the people you invite.</p>
-    </main>
-  );
+import { redirect } from "next/navigation";
+import { myMemberships } from "@/lib/data/family";
+import { createClient } from "@/lib/supabase/server";
+
+// Sends people to their family's tree, or to onboarding when they have none yet.
+export default async function Home() {
+  const db = await createClient();
+  const {
+    data: { user },
+  } = await db.auth.getUser();
+  if (!user) redirect("/login");
+  const memberships = await myMemberships(db, user.id);
+  if (memberships.length === 0) redirect("/start");
+  redirect(`/s/${memberships[0].spaceId}`);
 }

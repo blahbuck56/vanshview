@@ -1181,6 +1181,43 @@ export type Database = {
       };
     };
     Functions: {
+      accept_invite: { Args: { p_token: string }; Returns: string };
+      add_child: {
+        Args: {
+          p_existing?: string;
+          p_kind?: Database["public"]["Enums"]["parent_child_kind"];
+          p_new?: Json;
+          p_other_parent_id?: string;
+          p_parent_id: string;
+        };
+        Returns: string;
+      };
+      add_parent: {
+        Args: {
+          p_child_id: string;
+          p_existing?: string;
+          p_kind?: Database["public"]["Enums"]["parent_child_kind"];
+          p_link_partner?: boolean;
+          p_new?: Json;
+          p_union_kind?: Database["public"]["Enums"]["union_kind"];
+        };
+        Returns: string;
+      };
+      add_partner: {
+        Args: {
+          p_end_reason?: Database["public"]["Enums"]["union_end_reason"];
+          p_existing?: string;
+          p_kind?: Database["public"]["Enums"]["union_kind"];
+          p_new?: Json;
+          p_person_id: string;
+          p_start?: Json;
+        };
+        Returns: string;
+      };
+      add_sibling: {
+        Args: { p_existing?: string; p_new?: Json; p_parent_ids?: string[]; p_person_id: string };
+        Returns: string;
+      };
       ancestors: {
         Args: { p_max_depth?: number; p_person_id: string };
         Returns: {
@@ -1189,6 +1226,16 @@ export type Database = {
         }[];
       };
       assert_person_has_place: { Args: { p_person_id: string }; Returns: undefined };
+      claim_self: { Args: { p_person_id: string }; Returns: undefined };
+      commit_payload: {
+        Args: {
+          p_anchor_person_id?: string;
+          p_mode?: Database["public"]["Enums"]["submission_mode"];
+          p_payload: Json;
+          p_space_id: string;
+        };
+        Returns: Json;
+      };
       compute_is_minor: {
         Args: {
           p_birth_date: string;
@@ -1199,6 +1246,7 @@ export type Database = {
         };
         Returns: boolean;
       };
+      create_person: { Args: { p: Json; p_space_id: string }; Returns: string };
       dedup_candidates: {
         Args: {
           p_birth_year?: number;
@@ -1224,16 +1272,25 @@ export type Database = {
           person_id: string;
         }[];
       };
+      ensure_union: {
+        Args: { p_a: string; p_b: string; p_kind: Database["public"]["Enums"]["union_kind"]; p_space_id: string };
+        Returns: string;
+      };
+      find_or_create_place: { Args: { p_label: string; p_space_id: string }; Returns: string };
       fuzzy_date_end: { Args: { d: string; p: Database["public"]["Enums"]["date_precision"] }; Returns: string };
       fuzzy_date_is_normalised: {
         Args: { d: string; p: Database["public"]["Enums"]["date_precision"] };
         Returns: boolean;
       };
+      get_invite: { Args: { p_token: string }; Returns: Json };
       has_role: { Args: { p_min: Database["public"]["Enums"]["member_role"]; p_space_id: string }; Returns: boolean };
       is_member: { Args: { p_space_id: string }; Returns: boolean };
       lock_space_graph: { Args: { p_space_id: string }; Returns: undefined };
       neighborhood: { Args: { p_down?: number; p_focus_id: string; p_up?: number }; Returns: Json };
+      person_space: { Args: { p_person_id: string }; Returns: string };
       refresh_minor_flags: { Args: Record<PropertyKey, never>; Returns: number };
+      remove_person: { Args: { p_person_id: string }; Returns: undefined };
+      resolve_person: { Args: { p_existing: string; p_new: Json; p_space_id: string }; Returns: string };
       siblings: {
         Args: { p_person_id: string };
         Returns: {
@@ -1242,6 +1299,8 @@ export type Database = {
           shared_parent_ids: string[];
         }[];
       };
+      start_family: { Args: { p_name: string; p_self: Json }; Returns: string };
+      update_person: { Args: { p: Json; p_person_id: string }; Returns: undefined };
     };
     Enums: {
       branch_lineage: "all_descendants" | "patrilineal" | "matrilineal";

@@ -23,7 +23,12 @@ export const SubmittedPersonSchema = z.union([
   withTempId(personFieldsSchema({ allowAskLater: true })),
 ]);
 
-export const SubmitterSchema = withTempId(personFieldsSchema({ allowAskLater: false }));
+// The submitter is either a new person (public form: phone required, no "ask later") or,
+// in the in-app wizard, the signed-in member's own existing person.
+export const SubmitterSchema = z.union([
+  ExistingPersonRefSchema,
+  withTempId(personFieldsSchema({ allowAskLater: false })),
+]);
 
 export const SubmissionPayloadSchema = z
   .object({
