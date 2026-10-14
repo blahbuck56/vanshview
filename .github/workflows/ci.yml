@@ -55,15 +55,15 @@ jobs:
       - name: pgTAP (constraints, derived queries, RLS per role)
         run: pnpm supabase test db
 
-      - name: Lint database functions (plpgsql_check)
-        run: pnpm supabase db lint --local --level warning --fail-on error
-
       - name: Generated types match the schema
         run: |
           pnpm -s db:types
           git diff --exit-code -- types/database.ts \
             || (echo "::error::types/database.ts is stale. Run 'pnpm db:types' and commit." && exit 1)
 
+      - name: Lint database functions (plpgsql_check)
+        run: pnpm supabase db lint --local --level warning --fail-on error
+
       - name: Supabase logs on failure
         if: failure()
-        run: docker logs supabase_db_vanshview 2>&1 | tail -200 || true
+        run: docker logs supabase_db_vanshview 2>&1 | grep -E "ERROR|FATAL" | tail -50 || true
