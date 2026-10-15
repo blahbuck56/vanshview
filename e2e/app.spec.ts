@@ -34,7 +34,7 @@ test("derived siblings: half and step", async ({ page }) => {
 });
 
 test("new user: start a family, run the wizard, add a half sibling, invite someone", async ({ page, browser }) => {
-  await signIn(page, "99999 00003");
+  await signIn(page, "99999 00005");
   await page.goto("/start");
   await page.getByLabel("What should we call this family?").fill(`Test family ${stamp}`);
   await page.getByLabel("First name").fill("Asha");
@@ -113,7 +113,7 @@ test("new user: start a family, run the wizard, add a half sibling, invite someo
 
   const other = await browser.newContext();
   const page2 = await other.newPage();
-  await signIn(page2, "99999 00004");
+  await signIn(page2, "99999 00006");
   await page2.goto(new URL(link).pathname);
   await page2.getByRole("button", { name: "Join the family" }).click();
   await expect(page2).toHaveURL(/\/s\//);
