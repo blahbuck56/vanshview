@@ -273,13 +273,19 @@ export async function myMemberships(db: DB, userId: string): Promise<Membership[
   }));
 }
 
-/** Postgres errors from our functions carry friendly messages; network/auth errors do not. */
+/**
+ * Messages raised by our database functions are written for people and shown as they are.
+ * Everything else (driver, network, auth) is translated or replaced with a generic message.
+ */
 export function errorMessage(e: unknown): string {
-  if (e && typeof e === "object" && "message" in e && typeof e.message === "string") {
-    if (/row-level security|permission denied/i.test(e.message)) {
-      return "You don't have permission to do that in this family.";
-    }
-    return e.message;
+  const message = e && typeof e === "object" && "message" in e && typeof e.message === "string" ? e.message : "";
+  if (!message) return "Something went wrong. Please try again.";
+  if (/row-level security|permission denied/i.test(message)) return "You don't have permission to do that in this family.";
+  if (/invalid input syntax for type uuid/i.test(message)) return "This link doesn't look right. Check it and try again.";
+  if (/JWT|refresh token|not authenticated/i.test(message)) return "Your session has ended. Please sign in again.";
+  if (/Failed to fetch|NetworkError|network/i.test(message)) return "Can't reach Vanshview. Check your connection and try again.";
+  if (/duplicate key|violates|syntax error|relation .* does not exist|function .* does not exist/i.test(message)) {
+    return "Something went wrong saving that. Please try again.";
   }
-  return "Something went wrong. Please try again.";
+  return message;
 }

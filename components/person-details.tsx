@@ -73,6 +73,7 @@ export function PersonDetails({
   person,
   relatives,
   canEdit,
+  canAdd,
   isMe,
   isClaimed,
   canClaim,
@@ -86,7 +87,10 @@ export function PersonDetails({
 }: {
   person: Person;
   relatives: Relatives | null;
+  /** May change this person's own details (not someone else's claimed profile). */
   canEdit: boolean;
+  /** May add relatives around this person (any editor, claimed or not). */
+  canAdd: boolean;
   isMe: boolean;
   isClaimed: boolean;
   canClaim: boolean;
@@ -139,7 +143,7 @@ export function PersonDetails({
         )}
       </div>
 
-      {canEdit && !person.isPlaceholder && (
+      {canAdd && !person.isPlaceholder && (
         <div>
           <p className="pb-2 text-[12.5px] font-semibold text-ink-muted">Add a relative</p>
           <div className="grid grid-cols-2 gap-2">
@@ -154,7 +158,7 @@ export function PersonDetails({
 
       {r ? (
         <div className="flex flex-col gap-4">
-          <Section title="Parents" empty={canEdit ? "None added yet" : undefined}>
+          <Section title="Parents" empty={canAdd ? "None added yet" : undefined}>
             {r.parents.map((x) => (
               <Row key={x.person.id} person={x.person} label={parentLabel(x.person, x.kind)} onClick={() => onOpen(x.person.id)} />
             ))}

@@ -5,10 +5,11 @@ import { Suspense, useState } from "react";
 import { Button, ErrorNote, Field, Input } from "@/components/ui";
 import { normalizePhone } from "@/lib/domain/phone";
 import { createClient } from "@/lib/supabase/client";
+import { safeNext } from "@/lib/utils";
 
 function LoginForm() {
   const router = useRouter();
-  const next = useSearchParams().get("next") || "/";
+  const next = safeNext(useSearchParams().get("next"));
   const [phoneInput, setPhoneInput] = useState("");
   const [phone, setPhone] = useState<string | null>(null);
   const [code, setCode] = useState("");
@@ -26,8 +27,11 @@ function LoginForm() {
     setBusy(true);
     const { error } = await createClient().auth.signInWithOtp({ phone: parsed.e164 });
     setBusy(false);
-    if (error) setError(error.message);
-    else setPhone(parsed.e164);
+    if (error) setError(/rate|security purposes|seconds/i.test(error.message) ? "Please wait a few seconds before asking for another code." : "We couldn't send a code to that number. Check it and try again.");
+    else {
+      setCode("");
+      setPhone(parsed.e164);
+    }
   }
 
   async function verify(e: React.FormEvent) {
@@ -76,7 +80,7 @@ function LoginForm() {
             <h1 className="font-serif text-[28px] font-medium tracking-tight">Enter the code</h1>
             <p className="mt-2 text-[15px] text-ink-muted">
               Sent by SMS to <span className="font-medium text-ink">{phone}</span>.{" "}
-              <button type="button" className="text-accent underline-offset-2 hover:underline" onClick={() => setPhone(null)}>
+              <button type="button" className="text-accent underline-offset-2 hover:underline" onClick={() => { setError(null); setPhone(null); }}>
                 Change number
               </button>
             </p>

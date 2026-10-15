@@ -1272,6 +1272,7 @@ export type Database = {
           person_id: string;
         }[];
       };
+      detach_person: { Args: { p_person_id: string }; Returns: undefined };
       ensure_union: {
         Args: { p_a: string; p_b: string; p_kind: Database["public"]["Enums"]["union_kind"]; p_space_id: string };
         Returns: string;
@@ -1285,11 +1286,22 @@ export type Database = {
       get_invite: { Args: { p_token: string }; Returns: Json };
       has_role: { Args: { p_min: Database["public"]["Enums"]["member_role"]; p_space_id: string }; Returns: boolean };
       is_member: { Args: { p_space_id: string }; Returns: boolean };
+      list_members: {
+        Args: { p_space_id: string };
+        Returns: {
+          joined_at: string;
+          person_id: string;
+          phone: string;
+          role: Database["public"]["Enums"]["member_role"];
+          user_id: string;
+        }[];
+      };
       lock_space_graph: { Args: { p_space_id: string }; Returns: undefined };
       neighborhood: { Args: { p_down?: number; p_focus_id: string; p_up?: number }; Returns: Json };
       person_space: { Args: { p_person_id: string }; Returns: string };
       refresh_minor_flags: { Args: Record<PropertyKey, never>; Returns: number };
       remove_person: { Args: { p_person_id: string }; Returns: undefined };
+      replace_placeholder_parent: { Args: { p_child: string; p_parent: string }; Returns: string };
       resolve_person: { Args: { p_existing: string; p_new: Json; p_space_id: string }; Returns: string };
       siblings: {
         Args: { p_person_id: string };

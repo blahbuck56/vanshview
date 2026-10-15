@@ -34,7 +34,7 @@ export const LinkSchema = z.object({
 
 const basePersonFields = z.object({
   given_name: z.string().trim().max(100).optional(),
-  family_name: z.string().trim().max(100).optional(),
+  family_name: z.string().trim().max(100).nullish(),
   gender: z.enum(genders).default("unknown"),
   birth: FuzzyDateSchema.nullish(),
   death: FuzzyDateSchema.nullish(),

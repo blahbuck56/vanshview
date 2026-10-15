@@ -4,6 +4,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { AppHeader } from "@/components/app-header";
+import { NoAccess } from "@/components/no-access";
 import { PersonForm } from "@/components/person-form";
 import { Button, ErrorNote, Field, Segmented, Spinner, Toggle } from "@/components/ui";
 import {
@@ -52,7 +53,7 @@ function Wizard() {
   const { spaceId } = useParams<{ spaceId: string }>();
   const about = useSearchParams().get("about");
   const router = useRouter();
-  const { ctx } = useSpace(spaceId);
+  const { ctx, error: ctxError } = useSpace(spaceId);
 
   const [anchor, setAnchor] = useState<Person | null>(null);
   const [rel, setRel] = useState<Relatives | null>(null);
@@ -77,7 +78,8 @@ function Wizard() {
       const a = people.get(anchorId) ?? null;
       setAnchor(a);
       setRel(r);
-      const birth = r.parents.filter((p) => ["biological", "adoptive", "unknown"].includes(p.kind));
+      // "Unknown mother/father" placeholders count as missing: a card fills them in.
+      const birth = r.parents.filter((p) => ["biological", "adoptive", "unknown"].includes(p.kind) && !p.person.isPlaceholder);
       const family = a?.familyName ?? "";
       if (birth.length === 0) {
         setParents([
@@ -91,22 +93,50 @@ function Wizard() {
     });
   }, [anchorId]);
 
+  if (ctxError || (ctx && !ctx.membership)) return <NoAccess reason={ctxError} />;
+  const blocked =
+    ctx && ctx.membership?.role === "viewer"
+      ? "Viewers can look at the tree but can't add people. Ask an admin of this family to make you an editor."
+      : ctx && !anchorId
+        ? "First find yourself in the tree and tap “This is me” on your profile. Then this guide can add your family around you."
+        : null;
+  if (blocked) {
+    return (
+      <div className="min-h-dvh">
+        <AppHeader spaceId={spaceId} memberships={ctx!.memberships} active="wizard" />
+        <main className="mx-auto flex max-w-xl flex-col gap-4 px-4 pt-10">
+          <h1 className="font-serif text-[26px] font-medium tracking-tight">Add your family</h1>
+          <p className="text-ink-muted">{blocked}</p>
+          <Button className="self-start" onClick={() => router.push(`/s/${spaceId}`)}>
+            Open the tree
+          </Button>
+        </main>
+      </div>
+    );
+  }
   if (!ctx || !anchorId || !anchor || !rel) {
     return (
       <div className="p-6">
-        {ctx && !anchorId ? <p className="text-ink-muted">Link yourself to a person in the tree first (“This is me”).</p> : <Spinner />}
+        <Spinner />
       </div>
     );
   }
 
   const isSelf = anchorId === ctx.membership?.personId;
   const who = isSelf ? "Your" : `${firstName(anchor)}'s`;
-  const existingBirthParents = rel.parents.filter((p) => ["biological", "adoptive", "unknown"].includes(p.kind));
+  const birthParents = rel.parents.filter((p) => ["biological", "adoptive", "unknown"].includes(p.kind));
+  const existingBirthParents = birthParents.filter((p) => !p.person.isPlaceholder);
   const activeParents = parents.filter((p) => !p.skip);
-  const parentOptions = [
+  // The anchor's two parent slots: a known parent, a new card, or an "Unknown mother/father" left as is.
+  const parentSlots = [
     ...existingBirthParents.map((p) => ({ id: `ex:${p.person.id}`, label: displayName(p.person) })),
-    ...activeParents.map((p) => ({ id: p.key, label: p.draft.givenName || (p.key === "mother" ? "Mother" : "Father") })),
+    ...parents.flatMap((c) => {
+      if (!c.skip) return [{ id: c.key, label: c.draft.givenName || (c.key === "mother" ? "Mother" : "Father") }];
+      const ph = birthParents.find((p) => p.person.isPlaceholder && p.person.gender === (c.key === "mother" ? "female" : "male"));
+      return ph ? [{ id: `ex:${ph.person.id}`, label: displayName(ph.person) }] : [];
+    }),
   ];
+  const parentOptions = parentSlots;
   const partnerOptions = [
     ...rel.partners.map((p) => ({ value: `ex:${p.person.id}`, label: displayName(p.person) })),
     ...partners.map((p) => ({ value: p.key, label: p.draft.givenName || "New partner" })),
@@ -171,8 +201,9 @@ function Wizard() {
 
     for (const c of [...activeParents, ...partners, ...children, ...siblings]) persons.push(personRef(c) as never);
 
-    // Parents of the anchor, and a union between the two parents.
-    const parentKeys = [...existingBirthParents.map((p) => `ex:${p.person.id}`), ...activeParents.map((p) => p.key)];
+    // Parents of the anchor, and a union between the two parents. A new parent replaces an
+    // "Unknown mother/father" placeholder in the database, keeping earlier siblings attached.
+    const parentKeys = parentSlots.map((s) => s.id);
     for (const p of activeParents) parentChild.push({ parent_temp_id: p.key, child_temp_id: "anchor", kind: "biological" });
     if (parentKeys.length === 2 && activeParents.length > 0) {
       unions.push({ member_temp_ids: [resolve(parentKeys[0]), resolve(parentKeys[1])], kind: "marriage" });
@@ -203,7 +234,8 @@ function Wizard() {
         shared = ["ph_father", "ph_mother"];
       }
       for (const s of siblings) {
-        const from = s.shared === "all" ? shared : [resolve(s.shared)];
+        // "Only <parent>" whose card was later switched to "Don't know" falls back to both.
+        const from = s.shared === "all" || !parentKeys.includes(s.shared) ? shared : [resolve(s.shared)];
         for (const p of from) parentChild.push({ parent_temp_id: p, child_temp_id: s.key, kind: "biological" });
       }
     }
@@ -278,7 +310,14 @@ function Wizard() {
               <p className="text-[14px] text-ink-muted">Already in the tree: {rel.partners.map((p) => displayName(p.person)).join(", ")}.</p>
             )}
             {partners.map((c) => (
-              <CardShell key={c.key} title="Partner" onRemove={() => setPartners(partners.filter((p) => p.key !== c.key))}>
+              <CardShell
+                key={c.key}
+                title="Partner"
+                onRemove={() => {
+                  setPartners(partners.filter((p) => p.key !== c.key));
+                  setChildren(children.map((ch) => (ch.otherParent === c.key ? { ...ch, otherParent: "none" } : ch)));
+                }}
+              >
                 <Field label="Relationship">
                   <Segmented
                     label="Relationship"

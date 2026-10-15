@@ -40,8 +40,8 @@ export default function JoinPage() {
           <Spinner />
         ) : !invite || !invite.valid ? (
           <>
-            <h1 className="font-serif text-[26px] font-medium">This invite link has expired</h1>
-            <p className="text-ink-muted">Ask the person who sent it for a new one.</p>
+            <h1 className="font-serif text-[26px] font-medium">This invite link no longer works</h1>
+            <p className="text-ink-muted">It may have expired or been turned off. Ask the person who sent it for a new one.</p>
           </>
         ) : invite.already_member ? (
           <>

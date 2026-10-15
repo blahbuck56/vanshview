@@ -22,6 +22,7 @@ export function AppHeader({
   const router = useRouter();
   const [q, setQ] = useState("");
   const [results, setResults] = useState<Person[]>([]);
+  const [open, setOpen] = useState(false);
   const current = memberships.find((m) => m.spaceId === spaceId);
 
   useEffect(() => {
@@ -34,7 +35,7 @@ export function AppHeader({
   }, [q, spaceId]);
 
   async function signOut() {
-    await createClient().auth.signOut();
+    await createClient().auth.signOut({ scope: "local" }); // only this device
     router.replace("/login");
     router.refresh();
   }
@@ -61,22 +62,19 @@ export function AppHeader({
             Vanshview
           </Link>
           <span className="h-5 w-px shrink-0 bg-rule" />
-          {memberships.length > 1 ? (
-            <select
-              aria-label="Family"
-              value={spaceId}
-              onChange={(e) => router.push(`/s/${e.target.value}`)}
-              className="min-w-0 max-w-[180px] truncate bg-transparent text-[14px] font-medium"
-            >
-              {memberships.map((m) => (
-                <option key={m.spaceId} value={m.spaceId}>
-                  {m.spaceName}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <span className="truncate text-[14px] font-medium">{current?.spaceName}</span>
-          )}
+          <select
+            aria-label="Family"
+            value={spaceId}
+            onChange={(e) => router.push(e.target.value === "new" ? "/start" : `/s/${e.target.value}`)}
+            className="min-w-0 max-w-[200px] truncate bg-transparent text-[14px] font-medium"
+          >
+            {memberships.map((m) => (
+              <option key={m.spaceId} value={m.spaceId}>
+                {m.spaceName}
+              </option>
+            ))}
+            <option value="new">+ Start another family</option>
+          </select>
         </div>
 
         <button
@@ -101,12 +99,19 @@ export function AppHeader({
               <span className="sr-only">Find someone</span>
               <input
                 value={q}
-                onChange={(e) => setQ(e.target.value)}
+                onChange={(e) => {
+                  setQ(e.target.value);
+                  setOpen(true);
+                }}
+                onFocus={() => setOpen(true)}
+                // Let a click on a result land before the list closes.
+                onBlur={() => setTimeout(() => setOpen(false), 150)}
+                onKeyDown={(e) => e.key === "Escape" && setOpen(false)}
                 placeholder="Find anyone in the family"
                 className="min-w-0 flex-1 bg-transparent text-[14px] text-ink outline-none placeholder:text-ink-muted"
               />
             </label>
-            {results.length > 0 && (
+            {open && results.length > 0 && (
               <div className="absolute inset-x-0 top-full z-40 mt-1 overflow-hidden rounded-md border border-rule bg-surface shadow-[0_6px_20px_rgba(22,24,27,0.1)]">
                 {results.map((p) => (
                   <button

@@ -67,3 +67,47 @@ jobs:
       - name: Supabase logs on failure
         if: failure()
         run: docker logs supabase_db_vanshview 2>&1 | grep -E "ERROR|FATAL" | tail -50 || true
+
+  e2e:
+    name: End-to-end (local Supabase + app, Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: 1
+      # Phone sign-in needs an SMS provider switched on; test numbers never reach it.
+      SUPABASE_AUTH_SMS_TWILIO_AUTH_TOKEN: ci-placeholder
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Start Supabase (database, auth, API)
+        run: pnpm supabase start -x studio,imgproxy,logflare,vector,edge-runtime,supavisor,realtime,storage-api,postgres-meta,mailpit
+
+      - name: Point the app and tests at it
+        run: |
+          KEY=$(pnpm -s supabase status -o json | jq -r '.PUBLISHABLE_KEY')
+          {
+            echo "NEXT_PUBLIC_VANSHVIEW_SUPABASE_URL=http://127.0.0.1:54321"
+            echo "NEXT_PUBLIC_VANSHVIEW_SUPABASE_KEY=$KEY"
+            echo "E2E_SUPABASE_KEY=$KEY"
+          } >> "$GITHUB_ENV"
+
+      - run: pnpm build
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm e2e
+
+      - name: Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7

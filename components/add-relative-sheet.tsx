@@ -41,7 +41,12 @@ export function AddRelativeSheet({
   const [parentRole, setParentRole] = useState<"mother" | "father" | null>(null);
   const [parentKind, setParentKind] = useState<ParentKind>("biological");
   const birthParents = relatives.parents.filter((p) => BIRTH_KINDS.has(p.kind));
-  const otherParent = birthParents.length === 1 ? birthParents[0].person : null;
+  const knownBirthParents = birthParents.filter((p) => !p.person.isPlaceholder);
+  // A new mother/father takes the place of an "Unknown mother/father" (done by the database).
+  const placeholderFor = (role: "mother" | "father" | null) =>
+    birthParents.find((p) => p.person.isPlaceholder && (role === null || p.person.gender === (role === "mother" ? "female" : "male")));
+  const otherParent = knownBirthParents.length === 1 && birthParents.length === 1 ? knownBirthParents[0].person : null;
+  const birthSlotsFull = knownBirthParents.length >= 2;
   const [couple, setCouple] = useState<"married" | "partners" | "no" | "unknown">("married");
 
   // Child
@@ -90,6 +95,16 @@ export function AddRelativeSheet({
     setBusy(true);
     let result: { data: unknown; error: unknown };
     if (kind === "parent") {
+      if (!parentRole) {
+        setBusy(false);
+        setError("Choose whether you're adding a mother or a father.");
+        return;
+      }
+      if (birthSlotsFull && BIRTH_KINDS.has(parentKind)) {
+        setBusy(false);
+        setError(`${name} already has two parents in the tree. Choose step-parent or guardian, or edit the existing parent.`);
+        return;
+      }
       result = await db.rpc("add_parent", {
         p_child_id: anchor.id,
         p_new: p_new as never,
@@ -171,6 +186,11 @@ export function AddRelativeSheet({
               ]}
             />
           </Field>
+        )}
+        {kind === "parent" && parentRole && placeholderFor(parentRole) && (
+          <p className="rounded-md bg-ground px-3 py-2.5 text-[13px] text-ink-muted">
+            They'll replace “{displayName(placeholderFor(parentRole)!.person)}”, so {name}'s brothers and sisters get them too.
+          </p>
         )}
 
         {!pick && <NameSearch spaceId={spaceId} excludeIds={existingIds} onPickExisting={(p) => setPick({ existing: p })} onPickNew={(n) => {

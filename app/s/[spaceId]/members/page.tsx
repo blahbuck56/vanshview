@@ -4,14 +4,16 @@ import { Copy, MessageCircle } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { AppHeader } from "@/components/app-header";
+import { NoAccess } from "@/components/no-access";
 import { Button, ErrorNote, Field, Segmented, Spinner } from "@/components/ui";
 import { displayName, errorMessage, loadPeople, type Person } from "@/lib/data/family";
+import { formatPhone } from "@/lib/domain/phone";
 import { createClient } from "@/lib/supabase/client";
 import { useSpace } from "@/lib/use-space";
 import type { Database } from "@/types/database";
 
 type Role = Database["public"]["Enums"]["member_role"];
-type Member = { userId: string; role: Role; person: Person | null };
+type Member = { userId: string; role: Role; person: Person | null; phone: string | null };
 type Invite = { id: string; token: string; role: Role; expires_at: string };
 
 const ROLE_HELP: Record<Role, string> = {
@@ -23,7 +25,7 @@ const ROLE_HELP: Record<Role, string> = {
 
 export default function MembersPage() {
   const { spaceId } = useParams<{ spaceId: string }>();
-  const { ctx } = useSpace(spaceId);
+  const { ctx, error: ctxError } = useSpace(spaceId);
   const [members, setMembers] = useState<Member[] | null>(null);
   const [invites, setInvites] = useState<Invite[]>([]);
   const [newRole, setNewRole] = useState<Role>("editor");
@@ -34,10 +36,30 @@ export default function MembersPage() {
 
   const load = useCallback(async () => {
     const db = createClient();
-    const { data, error } = await db.from("space_members").select("user_id, role, person_id").eq("space_id", spaceId).order("joined_at");
+    // person_id and phone can be null (generated function types say otherwise).
+    type Row = { user_id: string; role: Role; person_id: string | null; phone: string | null };
+    const listed = await db.rpc("list_members", { p_space_id: spaceId });
+    let data = listed.data as Row[] | null;
+    let error = listed.error;
+    if (error?.code === "PGRST202") {
+      // Database not yet updated with list_members (migration 20261016000100): list without phones.
+      const fallback = await db.from("space_members").select("user_id, role, person_id").eq("space_id", spaceId).order("joined_at");
+      data = (fallback.data ?? []).map((m) => ({ ...m, phone: null }));
+      error = fallback.error;
+    }
     if (error) return setError(errorMessage(error));
-    const people = await loadPeople(db, (data ?? []).map((m) => m.person_id).filter((x): x is string => Boolean(x)));
-    setMembers((data ?? []).map((m) => ({ userId: m.user_id, role: m.role, person: m.person_id ? (people.get(m.person_id) ?? null) : null })));
+    const people = await loadPeople(
+      db,
+      (data ?? []).map((m) => m.person_id).filter((x): x is string => Boolean(x)),
+    );
+    setMembers(
+      (data ?? []).map((m) => ({
+        userId: m.user_id,
+        role: m.role,
+        person: m.person_id ? (people.get(m.person_id) ?? null) : null,
+        phone: m.phone,
+      })),
+    );
     const inv = await db
       .from("invites")
       .select("id, token, role, expires_at")
@@ -63,13 +85,33 @@ export default function MembersPage() {
   }
 
   async function revoke(id: string) {
-    await createClient().from("invites").update({ status: "revoked" }).eq("id", id);
+    setError(null);
+    const { error } = await createClient().from("invites").update({ status: "revoked" }).eq("id", id);
+    if (error) setError(errorMessage(error));
+    load();
+  }
+
+  async function removeMember(m: Member) {
+    const who = m.person ? displayName(m.person) : m.phone ? formatPhone(m.phone) : "this member";
+    if (!window.confirm(`Remove ${who} from the family? They'll lose access straight away. People in the tree stay.`))
+      return;
+    setError(null);
+    const { error } = await createClient()
+      .from("space_members")
+      .delete()
+      .eq("space_id", spaceId)
+      .eq("user_id", m.userId);
+    if (error) setError(errorMessage(error));
     load();
   }
 
   async function changeRole(userId: string, role: Role) {
     setError(null);
-    const { error } = await createClient().from("space_members").update({ role }).eq("space_id", spaceId).eq("user_id", userId);
+    const { error } = await createClient()
+      .from("space_members")
+      .update({ role })
+      .eq("space_id", spaceId)
+      .eq("user_id", userId);
     if (error) setError(errorMessage(error));
     load();
   }
@@ -80,7 +122,13 @@ export default function MembersPage() {
     setTimeout(() => setCopied(null), 2000);
   }
 
-  if (!ctx) return <div className="p-6"><Spinner /></div>;
+  if (ctxError || (ctx && !ctx.membership)) return <NoAccess reason={ctxError} />;
+  if (!ctx)
+    return (
+      <div className="p-6">
+        <Spinner />
+      </div>
+    );
 
   return (
     <div className="min-h-dvh">
@@ -91,7 +139,9 @@ export default function MembersPage() {
           <p className="mt-1 text-[14px] text-ink-muted">People who can open this family's tree.</p>
           <ErrorNote message={error} />
           {!members ? (
-            <div className="mt-4"><Spinner /></div>
+            <div className="mt-4">
+              <Spinner />
+            </div>
           ) : (
             <ul className="mt-4 divide-y divide-rule rounded-md border border-rule bg-surface">
               {members.map((m) => (
@@ -101,19 +151,26 @@ export default function MembersPage() {
                       {m.person ? displayName(m.person) : "Not linked to a person yet"}
                       {m.userId === ctx.userId && <span className="ml-2 font-sans text-[12px] text-accent">You</span>}
                     </p>
-                    <p className="text-[12.5px] text-ink-muted">{ROLE_HELP[m.role]}</p>
+                    <p className="text-[12.5px] text-ink-muted tabular-nums">
+                      {[m.phone && formatPhone(m.phone), ROLE_HELP[m.role]].filter(Boolean).join(" · ")}
+                    </p>
                   </div>
                   {isAdmin && m.userId !== ctx.userId && m.role !== "owner" ? (
-                    <select
-                      aria-label="Role"
-                      value={m.role}
-                      onChange={(e) => changeRole(m.userId, e.target.value as Role)}
-                      className="h-9 rounded-md border border-edge bg-surface px-2 text-[13px]"
-                    >
-                      <option value="viewer">Viewer</option>
-                      <option value="editor">Editor</option>
-                      <option value="admin">Admin</option>
-                    </select>
+                    <>
+                      <select
+                        aria-label="Role"
+                        value={m.role}
+                        onChange={(e) => changeRole(m.userId, e.target.value as Role)}
+                        className="h-9 rounded-md border border-edge bg-surface px-2 text-[13px]"
+                      >
+                        <option value="viewer">Viewer</option>
+                        <option value="editor">Editor</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                      <button type="button" className="text-[13px] text-danger" onClick={() => removeMember(m)}>
+                        Remove
+                      </button>
+                    </>
                   ) : (
                     <span className="text-[13px] capitalize text-ink-muted">{m.role}</span>
                   )}
@@ -151,8 +208,13 @@ export default function MembersPage() {
             {invites.length > 0 && (
               <ul className="flex flex-col gap-2">
                 {invites.map((i) => (
-                  <li key={i.id} className="flex flex-wrap items-center gap-2 rounded-md border border-rule bg-surface px-3 py-2.5">
-                    <span className="min-w-0 flex-1 truncate font-mono text-[12.5px] text-ink-muted">{link(i.token)}</span>
+                  <li
+                    key={i.id}
+                    className="flex flex-wrap items-center gap-2 rounded-md border border-rule bg-surface px-3 py-2.5"
+                  >
+                    <span className="min-w-0 flex-1 truncate font-mono text-[12.5px] text-ink-muted">
+                      {link(i.token)}
+                    </span>
                     <span className="text-[12.5px] capitalize">{i.role}</span>
                     <Button className="h-8 px-3" onClick={() => copy(i.token)}>
                       <Copy size={14} /> {copied === i.token ? "Copied" : "Copy"}

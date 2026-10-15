@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { PersonForm } from "@/components/person-form";
@@ -15,6 +16,7 @@ export default function StartPage() {
   const [errors, setErrors] = useState<DraftErrors>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [hasFamily, setHasFamily] = useState(false);
 
   // Pre-fill the phone they just signed in with.
   useEffect(() => {
@@ -23,6 +25,13 @@ export default function StartPage() {
       .then(({ data }) => {
         const phone = data.user?.phone;
         if (phone) setMe((d) => ({ ...d, phone: `+${phone.replace(/^\+/, "")}` }));
+        if (data.user) {
+          createClient()
+            .from("space_members")
+            .select("space_id", { count: "exact", head: true })
+            .eq("user_id", data.user.id)
+            .then(({ count }) => setHasFamily(Boolean(count)));
+        }
       });
   }, []);
 
@@ -49,7 +58,14 @@ export default function StartPage() {
 
   return (
     <main className="mx-auto w-full max-w-md px-4 pt-12 pb-16">
-      <p className="font-serif text-lg font-semibold">Vanshview</p>
+      <div className="flex items-baseline justify-between">
+        <p className="font-serif text-lg font-semibold">Vanshview</p>
+        {hasFamily && (
+          <Link href="/" className="text-[14px] text-ink-muted hover:text-ink">
+            Back to your family
+          </Link>
+        )}
+      </div>
       <form onSubmit={submit} className="mt-10 flex flex-col gap-8">
         <section className="flex flex-col gap-4">
           <h1 className="font-serif text-[28px] font-medium tracking-tight">Start your family tree</h1>

@@ -20,7 +20,7 @@ export function EditPersonSheet({
   onDone: () => void;
 }) {
   const [draft, setDraft] = useState(
-    person.isPlaceholder ? emptyDraft({ gender: person.gender, familyName: person.familyName ?? "", living: false }) : draftFromPerson(person),
+    person.isPlaceholder ? emptyDraft({ gender: person.gender, familyName: person.familyName ?? "" }) : draftFromPerson(person),
   );
   const [errors, setErrors] = useState<DraftErrors>({});
   const [error, setError] = useState<string | null>(null);

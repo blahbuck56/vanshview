@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { myMemberships, type Membership } from "@/lib/data/family";
+import { errorMessage, myMemberships, type Membership } from "@/lib/data/family";
 import { createClient } from "@/lib/supabase/client";
 
 export type SpaceContext = {
@@ -40,7 +40,7 @@ export function useSpace(spaceId: string) {
         ),
       });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not load this family.");
+      setError(errorMessage(e));
     }
   }, [spaceId]);
 

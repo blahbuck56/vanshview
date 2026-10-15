@@ -44,7 +44,8 @@ export function draftFromPerson(p: Person): PersonDraft {
     place: p.place ?? "",
     phone: p.phone ?? "",
     askLater: p.phoneStatus === "requested",
-    under18: false,
+    // Under 18 without a birth date was ticked by hand; keep it so editing does not demand a phone.
+    under18: p.isMinor && !p.birth,
   };
 }
 
@@ -80,7 +81,8 @@ export function draftToPayload(
 
   const value: PersonFieldsInput = {
     given_name: d.givenName.trim() || undefined,
-    family_name: d.familyName.trim() || undefined,
+    // null (not undefined) so clearing a family name on edit actually clears it.
+    family_name: d.familyName.trim() || null,
     gender: d.gender,
     is_deceased: !d.living,
     birth: born.ok && born.value.date ? born.value : null,

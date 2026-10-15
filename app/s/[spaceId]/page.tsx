@@ -6,6 +6,7 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import { AddRelativeSheet, type RelativeKind } from "@/components/add-relative-sheet";
 import { AppHeader } from "@/components/app-header";
 import { EditPersonSheet } from "@/components/edit-person-sheet";
+import { NoAccess } from "@/components/no-access";
 import { PersonDetails } from "@/components/person-details";
 import { ErrorNote, Segmented, Spinner } from "@/components/ui";
 import {
@@ -50,6 +51,15 @@ function FamilyTree() {
   const [error, setError] = useState<string | null>(null);
   const [mobileView, setMobileView] = useState<"person" | "tree">("person");
   const [empty, setEmpty] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(true);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 768px)");
+    const update = () => setIsDesktop(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
 
   // Default focus: the person you claimed, else the first person added.
   useEffect(() => {
@@ -89,12 +99,21 @@ function FamilyTree() {
     const db = createClient();
     try {
       const [people, rel] = await Promise.all([loadPeople(db, [selectedId]), loadRelatives(db, selectedId)]);
-      setPerson(people.get(selectedId) ?? null);
+      const found = people.get(selectedId);
+      if (!found || found.spaceId !== spaceId) {
+        // A stale or mistyped ?focus= link: start from the default person instead.
+        window.history.replaceState(null, "", window.location.pathname);
+        setFocusId(null);
+        setSelectedId(null);
+        setTree(null);
+        return;
+      }
+      setPerson(found);
       setRelatives(rel);
     } catch (e) {
       setError(errorMessage(e));
     }
-  }, [selectedId]);
+  }, [selectedId, spaceId]);
 
   useEffect(() => {
     loadTree();
@@ -142,14 +161,11 @@ function FamilyTree() {
     const { error } = await createClient().rpc("claim_self", { p_person_id: person.id });
     if (error) return setError(errorMessage(error));
     setToast("Linked to your account");
-    reloadCtx();
+    await Promise.all([reloadCtx(), refreshAll()]);
   }
 
-  if (ctxError) return <p className="p-6 text-danger">{ctxError}</p>;
-  if (!ctx) return <div className="p-6"><Spinner /></div>;
-  if (!ctx.membership) {
-    return <p className="p-6 text-ink-muted">You're not a member of this family. Ask someone in it for an invite link.</p>;
-  }
+  if (ctxError || (ctx && !ctx.membership)) return <NoAccess reason={ctxError} />;
+  if (!ctx || !ctx.membership) return <div className="p-6"><Spinner /></div>;
 
   const role = ctx.membership.role;
   const claimedBy = person ? ctx.claims.get(person.id) : undefined;
@@ -161,6 +177,7 @@ function FamilyTree() {
       person={person}
       relatives={relatives}
       canEdit={canEditPerson}
+      canAdd={role !== "viewer"}
       isMe={ctx.membership.personId === person.id}
       isClaimed={Boolean(claimedBy)}
       canClaim={!ctx.membership.personId && !claimedBy && !person.isPlaceholder && !person.isDeceased}
@@ -179,6 +196,14 @@ function FamilyTree() {
   return (
     <div className="flex h-dvh flex-col">
       <AppHeader spaceId={spaceId} memberships={ctx.memberships} active="tree" onPickPerson={focus} />
+
+      {!ctx.membership.personId && !empty && (
+        <div role="note" className="border-b border-rule bg-accent-soft px-4 py-2.5 text-[13.5px] text-ink md:px-5">
+          <b className="font-medium">Welcome. Which one is you?</b> Search your name above, open your profile and tap{" "}
+          <b className="font-medium">This is me</b>.{" "}
+          {role !== "viewer" && "Not in the tree yet? Open a parent or sibling and add yourself."}
+        </div>
+      )}
 
       <div className="flex items-center gap-2 border-b border-rule bg-surface px-4 py-2 md:hidden">
         <Segmented
@@ -217,7 +242,8 @@ function FamilyTree() {
               </label>
               <span className="hidden text-ink-muted lg:inline">· Double-click someone to centre on them</span>
             </div>
-            {tree && focusId ? (
+            {/* On phones the tree is built only when shown, so it is centred on a visible canvas. */}
+            {tree && focusId && (isDesktop || mobileView === "tree") ? (
               <TreeView
                 data={tree}
                 focusId={focusId}
