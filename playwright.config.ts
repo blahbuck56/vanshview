@@ -15,6 +15,8 @@ export default defineConfig({
   reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : [["list"]],
   use: {
     baseURL,
+    // A click or fill that cannot happen fails in 15s instead of using up the whole test.
+    actionTimeout: 15_000,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },
