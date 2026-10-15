@@ -31,7 +31,7 @@ What Vanshview must get right, and where each case is checked. Three layers, all
 - Second parent is linked as a couple; a third birth parent is refused with an explanation.
 - Typing a name offers people already in the family; picking one links them, no duplicate.
 - Partners: married / divorced labels and year; same partner twice is refused.
-- Children: with two partners you must pick the other parent.
+- Children: with two current partners you must pick the other parent.
 - No loops: someone can't become their own ancestor.
 - Dates like "1952", "about 1950" are understood; nonsense and death-before-birth are explained.
 - "Under 18" is kept when editing (no phone demanded).
