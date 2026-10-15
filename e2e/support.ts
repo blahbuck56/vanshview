@@ -19,11 +19,9 @@ export const SEED = {
 export const fresh = (n: number) => `99999 000${String(n).padStart(2, "0")}`;
 const e164 = (local: string) => `+91${local.replace(/\D/g, "")}`;
 
-/** Signs in through the real login screen. */
-export async function signIn(page: Page, local: string) {
-  await page.goto("/login");
+/** On the login screen: enter the number, ask for a code (waiting out the per-number limit), type it. */
+export async function completeLogin(page: Page, local: string) {
   await page.getByLabel("Phone number").fill(local);
-  // One code per number per second (locally): if the suite just used this number, wait and ask again.
   const code = page.getByLabel("6-digit code");
   for (let attempt = 0; ; attempt++) {
     await page.getByRole("button", { name: "Send code" }).click();
@@ -35,8 +33,14 @@ export async function signIn(page: Page, local: string) {
       await page.waitForTimeout(1500);
     }
   }
-  await page.getByLabel("6-digit code").fill("123456");
+  await code.fill("123456");
   await page.getByRole("button", { name: "Continue", exact: true }).click();
+}
+
+/** Signs in through the real login screen. */
+export async function signIn(page: Page, local: string) {
+  await page.goto("/login");
+  await completeLogin(page, local);
   await expect(page).not.toHaveURL(/\/login/);
 }
 

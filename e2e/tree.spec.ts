@@ -76,6 +76,6 @@ test("phones: slim header, person view first, tree one tap away, search from an 
   await page.getByRole("radio", { name: "Tree" }).click();
   await expect(page.locator(".react-flow__node-person").first()).toBeVisible();
   // Tapping someone on the tree goes back to their details.
-  await page.locator(".react-flow__node-person", { hasText: "Rohan Mehra" }).click();
-  await expect(page.getByRole("heading", { name: "Rohan Mehra" })).toBeVisible();
+  await page.locator(".react-flow__node-person", { hasText: "Tanvi Malhotra" }).click();
+  await expect(page.getByRole("heading", { name: "Tanvi Malhotra" })).toBeVisible();
 });

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { SEED, signIn } from "./support";
+import { SEED, completeLogin, signIn } from "./support";
 
 // Sign-in, sign-out and who can reach which page.
 
@@ -31,10 +31,7 @@ test("rejects a malformed number and a wrong code", async ({ page }) => {
 test("signed-out visitors are sent to sign in, then back to the page they wanted", async ({ page }) => {
   await page.goto("/join/not-a-real-token");
   await expect(page).toHaveURL(/\/login\?next=%2Fjoin%2Fnot-a-real-token/);
-  await page.getByLabel("Phone number").fill(SEED.viewer);
-  await page.getByRole("button", { name: "Send code" }).click();
-  await page.getByLabel("6-digit code").fill("123456");
-  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await completeLogin(page, SEED.viewer);
   await expect(page).toHaveURL(/\/join\/not-a-real-token/);
   await expect(page.getByRole("heading", { name: /no longer works/ })).toBeVisible();
 
@@ -45,10 +42,7 @@ test("signed-out visitors are sent to sign in, then back to the page they wanted
 
 test("the return address after sign-in cannot point to another site", async ({ page }) => {
   await page.goto("/login?next=//example.com");
-  await page.getByLabel("Phone number").fill(SEED.viewer);
-  await page.getByRole("button", { name: "Send code" }).click();
-  await page.getByLabel("6-digit code").fill("123456");
-  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await completeLogin(page, SEED.viewer);
   await expect(page).toHaveURL(/127\.0\.0\.1|localhost/);
   await expect(page).toHaveURL(/\/s\//);
 });

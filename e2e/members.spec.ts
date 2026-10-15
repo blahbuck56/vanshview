@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { SEED, adult, api, fresh, joinViaInvite, newFamily, openPerson, panel, rpc, signIn } from "./support";
+import { SEED, adult, api, completeLogin, fresh, joinViaInvite, newFamily, openPerson, panel, rpc, signIn } from "./support";
 
 // Invites, joining, "This is me", roles, removing members, and keeping families apart.
 
@@ -20,10 +20,7 @@ test("invite link → join → find yourself → “This is me” → add your f
   const them = await ctx.newPage();
   await them.goto(new URL(link).pathname);
   await expect(them).toHaveURL(/\/login\?next=/); // sign in first, then back to the invite
-  await them.getByLabel("Phone number").fill(fresh(12));
-  await them.getByRole("button", { name: "Send code" }).click();
-  await them.getByLabel("6-digit code").fill("123456");
-  await them.getByRole("button", { name: "Continue", exact: true }).click();
+  await completeLogin(them, fresh(12));
   await expect(them.getByRole("heading", { name: /invited to the Invite family tree/ })).toBeVisible();
   await expect(them.getByText(/join as an editor/)).toBeVisible();
   await them.getByRole("button", { name: "Join the family" }).click();
