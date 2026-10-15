@@ -13,7 +13,8 @@
     "test:watch": "vitest",
     "db:test:local": "bash scripts/db-test-local.sh",
     "db:types": "supabase gen types typescript --db-url \"${DATABASE_URL:-postgresql://postgres:postgres@127.0.0.1:54322/postgres}\" --schema public | prettier --parser typescript > types/database.ts",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@fontsource/ibm-plex-mono": "5.2.7",

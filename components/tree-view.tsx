@@ -58,7 +58,7 @@ const PersonNode = memo(function PersonNode({ data }: NodeProps<Node<PersonData>
         <span className="truncate text-[11.5px] leading-4 text-ink-muted tabular-nums">
           {p.isPlaceholder
             ? "Tap to fill in"
-            : [formatLifespan(p.birth, p.death, p.isDeceased), p.place].filter(Boolean).join(" · ")}
+            : [formatLifespan(p.birth, p.death, p.isDeceased), p.place?.split(",")[0]].filter(Boolean).join(" · ")}
         </span>
         <Handle type="source" position={Position.Bottom} className="!opacity-0" />
       </div>

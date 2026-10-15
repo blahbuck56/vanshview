@@ -268,7 +268,6 @@ function Wizard() {
                 )}
               </CardShell>
             ))}
-            {parents.length === 0 && existingBirthParents.length >= 2 && <p className="text-[14px]">Both parents are in. Next.</p>}
           </>
         )}
 

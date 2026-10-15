@@ -19,9 +19,11 @@ export function useSpace(spaceId: string) {
 
   const load = useCallback(async () => {
     const db = createClient();
+    // getSession reads the cookie locally; every query is still verified by the database.
     const {
-      data: { user },
-    } = await db.auth.getUser();
+      data: { session },
+    } = await db.auth.getSession();
+    const user = session?.user;
     if (!user) return;
     try {
       const [memberships, members] = await Promise.all([
