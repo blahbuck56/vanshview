@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { PersonForm } from "@/components/person-form";
-import { Button, ErrorNote, Sheet } from "@/components/ui";
+import { Button, ErrorNote, Sheet, scrollToFirstError } from "@/components/ui";
 import { displayName, errorMessage, type Person } from "@/lib/data/family";
 import { draftFromPerson, draftToPayload, emptyDraft, type DraftErrors } from "@/lib/person-draft";
 import { createClient } from "@/lib/supabase/client";
@@ -31,6 +31,7 @@ export function EditPersonSheet({
     const parsed = draftToPayload(draft, { allowAskLater: !isSelf });
     if (!parsed.ok) {
       setErrors(parsed.errors);
+      scrollToFirstError();
       return;
     }
     setErrors({});
@@ -59,7 +60,7 @@ export function EditPersonSheet({
       }
     >
       <div className="flex flex-col gap-4">
-        <PersonForm value={draft} onChange={setDraft} errors={errors} allowAskLater={!isSelf} showGender />
+        <PersonForm value={draft} onChange={setDraft} errors={errors} allowAskLater={!isSelf} isSelf={isSelf} />
         <ErrorNote message={error} />
       </div>
     </Sheet>

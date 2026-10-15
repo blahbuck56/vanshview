@@ -26,6 +26,8 @@ export type Person = {
   email: string | null;
   biography: string | null;
   place: string | null;
+  /** Family name at birth, when it differs from the current one (e.g. before marriage). */
+  birthFamilyName: string | null;
 };
 
 export type Union = {
@@ -39,7 +41,7 @@ export type Union = {
 const fuzzy = (date: string | null, precision: PersonRow["birth_precision"], qualifier: PersonRow["birth_qualifier"]) =>
   date && precision !== "unknown" ? { date, precision, qualifier } : null;
 
-export function toPerson(r: PersonRow, place: string | null = null): Person {
+export function toPerson(r: PersonRow, place: string | null = null, birthFamilyName: string | null = null): Person {
   return {
     id: r.id,
     spaceId: r.space_id,
@@ -56,7 +58,14 @@ export function toPerson(r: PersonRow, place: string | null = null): Person {
     email: r.email,
     biography: r.biography,
     place,
+    birthFamilyName: birthFamilyName && birthFamilyName !== r.family_name ? birthFamilyName : null,
   };
+}
+
+/** "née Sharma" (women) or "born Sharma", when the family name at birth differs. */
+export function bornAs(p: Pick<Person, "birthFamilyName" | "gender">): string {
+  if (!p.birthFamilyName) return "";
+  return `${p.gender === "female" ? "née" : "born"} ${p.birthFamilyName}`;
 }
 
 export function displayName(p: Pick<Person, "givenName" | "familyName" | "isPlaceholder" | "gender">): string {
@@ -70,9 +79,19 @@ export function firstName(p: Pick<Person, "givenName" | "familyName" | "isPlaceh
   return p.isPlaceholder ? displayName(p) : (p.givenName ?? displayName(p));
 }
 
-/** "~1932–2009 · Amritsar", "b. 1991 · Pune". */
+/** "née Sharma · ~1932–2009 · Amritsar", "b. 1991 · Pune". */
 export function subtitle(p: Person): string {
-  return [formatLifespan(p.birth, p.death, p.isDeceased), p.place].filter(Boolean).join(" · ");
+  return [bornAs(p), formatLifespan(p.birth, p.death, p.isDeceased), p.place].filter(Boolean).join(" · ");
+}
+
+/** Family name at birth per person (person_names of kind "birth"). */
+async function birthNamesFor(db: DB, ids: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (ids.length === 0) return out;
+  const { data, error } = await db.from("person_names").select("person_id, family").eq("kind", "birth").in("person_id", ids);
+  if (error) throw error;
+  for (const row of data ?? []) if (row.family) out.set(row.person_id, row.family);
+  return out;
 }
 
 /** Main place label per person (the first place recorded). */
@@ -95,15 +114,18 @@ async function placesFor(db: DB, ids: string[]): Promise<Map<string, string>> {
 export async function loadPeople(db: DB, ids: string[]): Promise<Map<string, Person>> {
   const unique = [...new Set(ids)];
   if (unique.length === 0) return new Map();
-  const [{ data, error }, places] = await Promise.all([
+  const [{ data, error }, places, born] = await Promise.all([
     db.from("persons").select("*").in("id", unique).is("deleted_at", null),
     placesFor(db, unique),
+    birthNamesFor(db, unique),
   ]);
   if (error) throw error;
-  return new Map((data ?? []).map((r) => [r.id, toPerson(r, places.get(r.id) ?? null)]));
+  return new Map((data ?? []).map((r) => [r.id, toPerson(r, places.get(r.id) ?? null, born.get(r.id) ?? null)]));
 }
 
 export type Neighborhood = {
+  /** The person this neighbourhood was loaded around. */
+  focusId: string;
   persons: Person[];
   parentChild: ParentChildRow[];
   unions: Union[];
@@ -119,12 +141,11 @@ export async function loadNeighborhood(db: DB, focusId: string, up: number, down
     unions: UnionRow[];
     union_members: UnionMemberRow[];
   };
-  const places = await placesFor(
-    db,
-    n.persons.map((p) => p.id),
-  );
+  const ids = n.persons.map((p) => p.id);
+  const [places, born] = await Promise.all([placesFor(db, ids), birthNamesFor(db, ids)]);
   return {
-    persons: n.persons.map((p) => toPerson(p, places.get(p.id) ?? null)),
+    focusId,
+    persons: n.persons.map((p) => toPerson(p, places.get(p.id) ?? null, born.get(p.id) ?? null)),
     parentChild: n.parent_child,
     unions: n.unions.map((u) => ({
       id: u.id,
@@ -196,27 +217,25 @@ export async function loadRelatives(db: DB, personId: string): Promise<Relatives
 }
 
 export async function searchPeople(db: DB, spaceId: string, q: string, limit = 8): Promise<Person[]> {
-  const term = q.trim();
-  if (!term) return [];
-  const parts = term.split(/\s+/);
-  let query = db
-    .from("persons")
-    .select("*")
-    .eq("space_id", spaceId)
-    .is("deleted_at", null)
-    .eq("is_placeholder", false)
-    .limit(limit);
-  for (const part of parts) {
-    const safe = part.replace(/[%_,()]/g, "");
-    if (safe) query = query.or(`given_name.ilike.%${safe}%,family_name.ilike.%${safe}%`);
-  }
-  const { data, error } = await query;
-  if (error) throw error;
-  const places = await placesFor(
-    db,
-    (data ?? []).map((r) => r.id),
-  );
-  return (data ?? []).map((r) => toPerson(r, places.get(r.id) ?? null));
+  const parts = q.trim().split(/\s+/).map((part) => part.replace(/[%_,()]/g, "")).filter(Boolean);
+  if (parts.length === 0) return [];
+  let query = db.from("persons").select("id").eq("space_id", spaceId).is("deleted_at", null).eq("is_placeholder", false).limit(limit);
+  for (const part of parts) query = query.or(`given_name.ilike.%${part}%,family_name.ilike.%${part}%`);
+  // Also find people by their family name at birth: "Meena Sharma" finds Meena Gupta, née Sharma.
+  const [byName, byBirthName] = await Promise.all([
+    query,
+    db.from("person_names").select("person_id").eq("space_id", spaceId).eq("kind", "birth").ilike("family", `%${parts.at(-1)}%`).limit(limit),
+  ]);
+  if (byName.error) throw byName.error;
+  const ids = [...new Set([...(byName.data ?? []).map((r) => r.id), ...(byBirthName.data ?? []).map((r) => r.person_id)])];
+  const people = await loadPeople(db, ids);
+  const first = parts.length > 1 ? parts[0].toLowerCase() : null;
+  return ids
+    .map((id) => people.get(id))
+    .filter((p): p is Person => Boolean(p) && !p!.isPlaceholder)
+    // A birth-name match still has to match the first name typed, if one was.
+    .filter((p) => !first || (p.givenName ?? "").toLowerCase().includes(first) || (p.familyName ?? "").toLowerCase().includes(first))
+    .slice(0, limit);
 }
 
 export type Candidate = { person: Person; score: number; reasons: string[] };

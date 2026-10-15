@@ -91,13 +91,13 @@ test("partners and children: statuses show, duplicates and impossible links are 
   await expect(me.getByRole("button", { name: /Bela Shah.*married 2012/ })).toBeVisible();
   await expect(me.getByText("Partners", { exact: true })).toBeVisible();
 
-  // With two partners, the other parent of a new child must be chosen.
+  // Right after adding Bela, a new child's other parent is Bela: the current partner, never
+  // the divorced one (even though the form opens while the list is still refreshing).
   sheet = await startAdding(page, "Child", "Vikram");
   await fillNew(sheet, "Chirag Shah");
+  await expect(sheet.getByRole("radio", { name: "Bela Shah" })).toHaveAttribute("aria-checked", "true");
+  await expect(sheet.getByRole("radio", { name: "Anu Shah" })).toHaveAttribute("aria-checked", "false");
   await sheet.getByLabel("Born").fill("2015");
-  await sheet.getByRole("button", { name: "Add", exact: true }).click();
-  await expect(sheet.getByRole("alert")).toContainText("Choose who the other parent is");
-  await sheet.getByRole("radio", { name: "Bela Shah" }).click();
   await save(page, sheet, /Added Chirag/);
 
   // Adding Bela as a partner again is refused.
@@ -166,7 +166,9 @@ test("form rules: dates are understood, mistakes are explained, minors need no p
   await sheet.getByRole("option", { name: /as someone new/ }).click();
   await sheet.getByRole("button", { name: "Add", exact: true }).click();
   await expect(sheet.getByText("Add where they live (or lived).")).toBeVisible();
-  await expect(sheet.getByText("Add a phone number, or tap “Ask later”.")).toBeVisible();
+  // A child's phone is optional: no birth year yet is fine.
+  await expect(sheet.getByLabel("Phone (optional)")).toBeVisible();
+  await expect(sheet.getByText(/Add a phone number/)).toHaveCount(0);
 
   await sheet.getByLabel("Lives in").fill("Pune");
   await sheet.getByLabel("Born").fill("sometime");
@@ -176,7 +178,7 @@ test("form rules: dates are understood, mistakes are explained, minors need no p
   // "Under 18" removes the phone requirement; it is kept when editing later.
   await sheet.getByLabel("Born").fill("");
   await sheet.getByLabel("Under 18").check();
-  await expect(sheet.getByLabel("Phone")).toHaveCount(0);
+  await expect(sheet.getByLabel(/^Phone/)).toHaveCount(0);
   await save(page, sheet, /Added Kiaan/);
 
   const me = panel(page);

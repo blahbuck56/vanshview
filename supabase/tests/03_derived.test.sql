@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(26);
+select plan(27);
 
 create function pg_temp.sid(k text) returns uuid language sql immutable as $$
   select md5('vanshview:' || k)::uuid
@@ -41,8 +41,12 @@ select ok(
   'includes focus, partner, sibling, ancestors, children and partners of relatives');
 select ok(
   not exists (select 1 from nb, jsonb_array_elements(n -> 'persons') p
-              where p ->> 'id' in (pg_temp.sid('hari')::text, pg_temp.sid('ashwin')::text)),
-  'excludes people beyond the requested depth and side branches (uncles)');
+              where p ->> 'id' = pg_temp.sid('hari')::text),
+  'excludes people beyond the requested depth');
+select ok(
+  exists (select 1 from nb, jsonb_array_elements(n -> 'persons') p
+          where p ->> 'id' = pg_temp.sid('ashwin')::text),
+  'includes side branches: uncles and aunts (and their children)');
 select ok(
   not exists (
     select 1 from nb, jsonb_array_elements(n -> 'parent_child') e

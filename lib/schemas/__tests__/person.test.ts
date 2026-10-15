@@ -21,6 +21,8 @@ describe("spec 3a required fields", () => {
     const askLater = { given_name: "Meenakshi", location: where, phone_status: "requested" as const };
     expect(schema.safeParse(askLater).success).toBe(true);
     expect(issues(strict.safeParse(askLater))).toEqual(["phone:phone.required_for_self"]);
+    // Your own missing phone says so, rather than offering an "Ask later" that isn't there.
+    expect(issues(strict.safeParse({ given_name: "Meenakshi", location: where }))).toEqual(["phone:phone.required_for_self"]);
   });
 
   it("living minor: no phone needed (from birth date or the under-18 checkbox)", () => {

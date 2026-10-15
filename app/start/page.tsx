@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { PersonForm } from "@/components/person-form";
-import { Button, ErrorNote, Field, Input } from "@/components/ui";
+import { Button, ErrorNote, Field, Input, scrollToFirstError } from "@/components/ui";
 import { errorMessage } from "@/lib/data/family";
 import { draftToPayload, emptyDraft, type DraftErrors } from "@/lib/person-draft";
 import { createClient } from "@/lib/supabase/client";
@@ -15,6 +15,7 @@ export default function StartPage() {
   const [me, setMe] = useState(emptyDraft());
   const [errors, setErrors] = useState<DraftErrors>({});
   const [error, setError] = useState<string | null>(null);
+  const [familyError, setFamilyError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [hasFamily, setHasFamily] = useState(false);
 
@@ -39,21 +40,20 @@ export default function StartPage() {
     e.preventDefault();
     setError(null);
     const parsed = draftToPayload(me, { allowAskLater: false });
-    if (!parsed.ok) {
-      setErrors(parsed.errors);
-      return;
-    }
-    setErrors({});
-    if (!familyName.trim()) {
-      setError("Give your family space a name.");
+    setErrors(parsed.ok ? {} : parsed.errors);
+    setFamilyError(familyName.trim() ? null : "Give your family tree a name.");
+    if (!parsed.ok || !familyName.trim()) {
+      scrollToFirstError();
       return;
     }
     setBusy(true);
     const db = createClient();
     const { data, error } = await db.rpc("start_family", { p_name: familyName.trim(), p_self: parsed.value as never });
     setBusy(false);
-    if (error) setError(errorMessage(error));
-    else router.push(`/s/${data}/wizard`);
+    if (error) {
+      setError(errorMessage(error));
+      scrollToFirstError();
+    } else router.push(`/s/${data}/wizard`);
   }
 
   return (
@@ -69,7 +69,7 @@ export default function StartPage() {
       <form onSubmit={submit} className="mt-10 flex flex-col gap-8">
         <section className="flex flex-col gap-4">
           <h1 className="font-serif text-[28px] font-medium tracking-tight">Start your family tree</h1>
-          <Field label="What should we call this family?" htmlFor="family" hint="Only people you invite can see it.">
+          <Field label="What should we call this family?" htmlFor="family" hint="Only people you invite can see it." error={familyError}>
             <Input
               id="family"
               placeholder="e.g. Malhotra family"
@@ -81,7 +81,7 @@ export default function StartPage() {
         </section>
         <section className="flex flex-col gap-4">
           <h2 className="font-serif text-xl font-medium">About you</h2>
-          <PersonForm value={me} onChange={setMe} errors={errors} allowAskLater={false} />
+          <PersonForm value={me} onChange={setMe} errors={errors} allowAskLater={false} isSelf />
         </section>
         <ErrorNote message={error} />
         <Button variant="primary" type="submit" disabled={busy} className="h-12">

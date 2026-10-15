@@ -69,7 +69,9 @@ export function Field({
       </div>
       {children}
       {error ? (
-        <p className="text-[12.5px] text-danger">{error}</p>
+        <p data-field-error className="text-[12.5px] text-danger">
+          {error}
+        </p>
       ) : hint ? (
         <p className="text-[12.5px] text-ink-muted">{hint}</p>
       ) : null}
@@ -188,7 +190,7 @@ export function Sheet({
 export function ErrorNote({ message }: { message: string | null }) {
   if (!message) return null;
   return (
-    <p role="alert" className="rounded-md border border-danger/30 bg-danger/5 px-3 py-2 text-[13px] text-danger">
+    <p role="alert" data-field-error className="rounded-md border border-danger/30 bg-danger/5 px-3 py-2 text-[13px] text-danger">
       {message}
     </p>
   );
@@ -201,4 +203,11 @@ export function Spinner({ label = "Loading" }: { label?: string }) {
       {label}
     </div>
   );
+}
+
+/** After a failed save, bring the first error into view (it may be below the fold or behind a footer). */
+export function scrollToFirstError() {
+  window.setTimeout(() => {
+    document.querySelector("[data-field-error]")?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, 50);
 }

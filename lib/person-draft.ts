@@ -17,6 +17,8 @@ export type PersonDraft = {
   phone: string;
   askLater: boolean;
   under18: boolean;
+  /** Family name at birth, when different (e.g. before marriage). */
+  birthFamilyName: string;
 };
 
 export const emptyDraft = (overrides: Partial<PersonDraft> = {}): PersonDraft => ({
@@ -30,6 +32,7 @@ export const emptyDraft = (overrides: Partial<PersonDraft> = {}): PersonDraft =>
   phone: "",
   askLater: false,
   under18: false,
+  birthFamilyName: "",
   ...overrides,
 });
 
@@ -46,6 +49,7 @@ export function draftFromPerson(p: Person): PersonDraft {
     askLater: p.phoneStatus === "requested",
     // Under 18 without a birth date was ticked by hand; keep it so editing does not demand a phone.
     under18: p.isMinor && !p.birth,
+    birthFamilyName: p.birthFamilyName ?? "",
   };
 }
 
@@ -64,7 +68,12 @@ export function needsPhone(d: PersonDraft): boolean {
  */
 export function draftToPayload(
   d: PersonDraft,
-  opts: { allowAskLater: boolean },
+  /**
+   * allowAskLater: the phone may be skipped ("Ask later"); never for yourself.
+   * phoneOptional: an empty phone is skipped silently (children, often added before anyone
+   * knows their number or birth year).
+   */
+  opts: { allowAskLater: boolean; phoneOptional?: boolean },
 ): { ok: true; value: PersonFieldsInput } | { ok: false; errors: DraftErrors } {
   const errors: DraftErrors = {};
   const born = parseFuzzyDate(d.born);
@@ -89,7 +98,8 @@ export function draftToPayload(
     death: died && died.ok && died.value.date ? died.value : null,
     minor_override: d.under18 || null,
     phone,
-    phone_status: !phone && d.askLater ? "requested" : undefined,
+    phone_status: !phone && (d.askLater || (opts.phoneOptional && opts.allowAskLater)) ? "requested" : undefined,
+    birth_family_name: d.birthFamilyName.trim() || null,
     location: d.place.trim() ? { label: d.place.trim(), kind: d.living ? "current" : "death" } : null,
   };
 

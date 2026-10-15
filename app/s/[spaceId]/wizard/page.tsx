@@ -6,7 +6,7 @@ import { Suspense, useEffect, useState } from "react";
 import { AppHeader } from "@/components/app-header";
 import { NoAccess } from "@/components/no-access";
 import { PersonForm } from "@/components/person-form";
-import { Button, ErrorNote, Field, Segmented, Spinner, Toggle } from "@/components/ui";
+import { Button, ErrorNote, Field, Input, Segmented, Spinner, Toggle, scrollToFirstError } from "@/components/ui";
 import {
   displayName,
   errorMessage,
@@ -19,13 +19,16 @@ import {
   type Person,
   type Relatives,
 } from "@/lib/data/family";
+import { formatLifespan, parseFuzzyDate } from "@/lib/domain/dates";
+import { t } from "@/lib/i18n/en";
 import { draftToPayload, emptyDraft, type DraftErrors, type PersonDraft } from "@/lib/person-draft";
 import type { SubmissionPayloadInput } from "@/lib/schemas/submission";
 import { createClient } from "@/lib/supabase/client";
 import { useSpace } from "@/lib/use-space";
 
 type Card = { key: string; draft: PersonDraft; skip?: boolean };
-type PartnerCard = Card & { kind: "marriage" | "partnership"; status: "current" | "divorce" | "separation" | "death" };
+type PartnerCard = Card & { kind: "marriage" | "partnership"; status: "current" | "divorce" | "separation" | "death"; since: string };
+type ParentsRelation = "married" | "partners" | "divorced" | "unknown";
 type ChildCard = Card & { otherParent: string };
 type SiblingCard = Card & { shared: string };
 
@@ -68,6 +71,8 @@ function Wizard() {
   const [checking, setChecking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [parentsRelation, setParentsRelation] = useState<ParentsRelation>("married");
+  const [sinceErrors, setSinceErrors] = useState<Record<string, string>>({});
 
   const anchorId = about ?? ctx?.membership?.personId ?? null;
 
@@ -142,17 +147,49 @@ function Wizard() {
     ...partners.map((p) => ({ value: p.key, label: p.draft.givenName || "New partner" })),
     { value: "none", label: "Someone else / unknown" },
   ];
+  // A new child's other parent defaults to the one current partner; never to an ex or a late partner.
+  const currentPartners = [
+    ...rel.partners.filter((p) => !p.union.endReason).map((p) => `ex:${p.person.id}`),
+    ...partners.filter((p) => p.status === "current").map((p) => p.key),
+  ];
+  const defaultOtherParent =
+    partnerOptions.length === 1 ? "none" : currentPartners.length === 1 ? currentPartners[0] : partnerOptions.length === 2 ? partnerOptions[0].value : "";
+  const partnerGender = (key: string) =>
+    key.startsWith("ex:") ? rel.partners.find((p) => `ex:${p.person.id}` === key)?.person.gender : partners.find((p) => p.key === key)?.draft.gender;
+  const partnerFamily = (key: string) =>
+    key.startsWith("ex:") ? rel.partners.find((p) => `ex:${p.person.id}` === key)?.person.familyName : partners.find((p) => p.key === key)?.draft.familyName;
+  // A child usually takes the father's family name.
+  const childFamilyName = (otherParent: string) =>
+    anchor.gender === "female" && partnerGender(otherParent) === "male" && partnerFamily(otherParent)
+      ? partnerFamily(otherParent)!
+      : (anchor.familyName ?? "");
+  const twoParents = parentSlots.length === 2 && activeParents.length > 0;
 
   const allCards = (): Card[] => [...activeParents, ...partners, ...children, ...siblings];
+
+  const isChild = (c: Card) => children.some((ch) => ch.key === c.key);
 
   function validate(cards: Card[]): boolean {
     const next: Record<string, DraftErrors> = {};
     for (const c of cards) {
-      const r = draftToPayload(c.draft, { allowAskLater: true });
+      const r = draftToPayload(c.draft, { allowAskLater: true, phoneOptional: isChild(c) });
       if (!r.ok) next[c.key] = r.errors;
     }
+    const since: Record<string, string> = {};
+    for (const c of cards) {
+      const pc = partners.find((p) => p.key === c.key);
+      if (pc?.since.trim()) {
+        const d = parseFuzzyDate(pc.since);
+        if (!d.ok) since[c.key] = t(d.error);
+      }
+    }
     setErrors(next);
-    return Object.keys(next).length === 0;
+    setSinceErrors(since);
+    const missingOther = cards.some((c) => children.some((ch) => ch.key === c.key && !ch.otherParent));
+    if (missingOther) setError("Choose the other parent for each child.");
+    const ok = Object.keys(next).length === 0 && Object.keys(since).length === 0 && !missingOther;
+    if (!ok) scrollToFirstError();
+    return ok;
   }
 
   const stepCards = [activeParents, partners, children, siblings];
@@ -179,14 +216,14 @@ function Wizard() {
 
   function personRef(c: Card) {
     if (useExisting[c.key] && matches[c.key]) return { temp_id: c.key, existing_person_id: matches[c.key].person.id };
-    const r = draftToPayload(c.draft, { allowAskLater: true });
+    const r = draftToPayload(c.draft, { allowAskLater: true, phoneOptional: isChild(c) });
     return { temp_id: c.key, ...(r.ok ? r.value : {}) };
   }
 
   async function save() {
     setError(null);
     if (!validate(allCards())) {
-      setError("Some details need fixing. Go back to the step with the red message.");
+      setError((e) => e ?? "Some details need fixing. Go back to the step with the red message.");
       return;
     }
     const persons: SubmissionPayloadInput["persons"] = [];
@@ -205,15 +242,21 @@ function Wizard() {
     // "Unknown mother/father" placeholder in the database, keeping earlier siblings attached.
     const parentKeys = parentSlots.map((s) => s.id);
     for (const p of activeParents) parentChild.push({ parent_temp_id: p.key, child_temp_id: "anchor", kind: "biological" });
-    if (parentKeys.length === 2 && activeParents.length > 0) {
-      unions.push({ member_temp_ids: [resolve(parentKeys[0]), resolve(parentKeys[1])], kind: "marriage" });
+    if (twoParents) {
+      unions.push({
+        member_temp_ids: [resolve(parentKeys[0]), resolve(parentKeys[1])],
+        kind: parentsRelation === "partners" ? "partnership" : parentsRelation === "unknown" ? "unknown" : "marriage",
+        ...(parentsRelation === "divorced" ? { end_reason: "divorce" as const } : {}),
+      });
     }
 
     for (const p of partners) {
+      const start = p.since.trim() ? parseFuzzyDate(p.since) : null;
       unions.push({
         member_temp_ids: ["anchor", p.key],
         kind: p.kind,
         ...(p.status !== "current" ? { end_reason: p.status } : {}),
+        ...(start?.ok && start.value.date ? { start: start.value } : {}),
       });
     }
 
@@ -256,7 +299,10 @@ function Wizard() {
       p_anchor_person_id: anchorId!,
     });
     setBusy(false);
-    if (error) setError(errorMessage(error));
+    if (error) {
+      setError(errorMessage(error));
+      scrollToFirstError();
+    }
     else router.push(`/s/${spaceId}?focus=${anchorId}`);
   }
 
@@ -265,6 +311,43 @@ function Wizard() {
     set(list.map((c) => (c.key === key ? { ...c, ...patch } : c)));
 
   const total = allCards().length;
+
+  // What the review screen says about each person: their relationship, years and place.
+  const gendered = (d: PersonDraft, female: string, male: string, other: string) =>
+    d.gender === "female" ? female : d.gender === "male" ? male : other;
+  const optionLabel = (value: string) => partnerOptions.find((o) => o.value === value)?.label;
+  function describe(c: Card): { step: number; relation: string; details: string } {
+    const born = parseFuzzyDate(c.draft.born);
+    const died = parseFuzzyDate(c.draft.died);
+    const years = formatLifespan(born.ok ? born.value : null, !c.draft.living && died.ok ? died.value : null, !c.draft.living);
+    const details = [c.draft.birthFamilyName.trim() && `born ${c.draft.birthFamilyName.trim()}`, years, c.draft.place.trim()]
+      .filter(Boolean)
+      .join(" · ");
+    const partner = partners.find((p) => p.key === c.key);
+    const child = children.find((p) => p.key === c.key);
+    const sibling = siblings.find((p) => p.key === c.key);
+    if (partner) {
+      const base = partner.kind === "marriage" ? gendered(c.draft, "Wife", "Husband", "Spouse") : "Partner";
+      const status = { current: "", divorce: "divorced", separation: "separated", death: "widowed" }[partner.status];
+      const since = partner.since.trim() ? `${partner.kind === "marriage" ? "married" : "since"} ${partner.since.trim()}` : "";
+      return { step: 1, relation: [base, since, status].filter(Boolean).join(" · "), details };
+    }
+    if (child) {
+      const other = child.otherParent && child.otherParent !== "none" ? `with ${optionLabel(child.otherParent)}` : "other parent unknown";
+      return { step: 2, relation: `${gendered(c.draft, "Daughter", "Son", "Child")} · ${other}`, details };
+    }
+    if (sibling) {
+      const only = parentOptions.find((o) => o.id === sibling.shared);
+      const base = gendered(c.draft, "Sister", "Brother", "Sibling");
+      return { step: 3, relation: only ? `Half-${base.toLowerCase()} · only ${only.label}` : base, details };
+    }
+    return { step: 0, relation: c.key === "mother" ? "Mother" : "Father", details };
+  }
+
+  function skipToTree() {
+    if (total > 0 && !window.confirm(`Leave without saving? The ${total} ${total === 1 ? "person" : "people"} you've entered won't be added.`)) return;
+    router.push(`/s/${spaceId}?focus=${anchorId}`);
+  }
 
   return (
     <div className="min-h-dvh">
@@ -292,14 +375,36 @@ function Wizard() {
             )}
             {parents.map((c) => (
               <CardShell key={c.key} title={c.key === "mother" ? "Mother" : "Father"}>
-                <Toggle pressed={Boolean(c.skip)} onChange={(skip) => update(parents, setParents, c.key, { skip })}>
-                  Don't know
-                </Toggle>
+                <div>
+                  <Toggle pressed={Boolean(c.skip)} onChange={(skip) => update(parents, setParents, c.key, { skip })}>
+                    Don't know
+                  </Toggle>
+                </div>
                 {!c.skip && (
-                  <PersonForm value={c.draft} onChange={(d) => update(parents, setParents, c.key, { draft: d })} errors={cardErrors(c.key)} />
+                  <PersonForm
+                    value={c.draft}
+                    onChange={(d) => update(parents, setParents, c.key, { draft: d })}
+                    errors={cardErrors(c.key)}
+                    showGender={false}
+                  />
                 )}
               </CardShell>
             ))}
+            {twoParents && (
+              <Field label={`${parentSlots[0].label} and ${parentSlots[1].label} are (or were)`}>
+                <Segmented
+                  label="Parents' relationship"
+                  value={parentsRelation}
+                  onChange={setParentsRelation}
+                  options={[
+                    { value: "married", label: "Married" },
+                    { value: "partners", label: "Partners" },
+                    { value: "divorced", label: "Divorced or separated" },
+                    { value: "unknown", label: "Don't know" },
+                  ]}
+                />
+              </Field>
+            )}
           </>
         )}
 
@@ -333,12 +438,31 @@ function Wizard() {
                   <Segmented
                     label="Status"
                     value={c.status}
-                    onChange={(status) => update(partners, setPartners, c.key, { status })}
+                    onChange={(status) =>
+                      // Widowed means this partner has passed away.
+                      update(partners, setPartners, c.key, {
+                        status,
+                        draft: { ...c.draft, living: status !== "death", phone: status === "death" ? "" : c.draft.phone },
+                      })
+                    }
                     options={[
                       { value: "current", label: "Together" },
                       { value: "divorce", label: "Divorced" },
+                      { value: "separation", label: "Separated" },
                       { value: "death", label: "Widowed" },
                     ]}
+                  />
+                </Field>
+                <Field
+                  label={c.kind === "marriage" ? "Married in (optional)" : "Together since (optional)"}
+                  htmlFor={`${c.key}-since`}
+                  error={sinceErrors[c.key]}
+                >
+                  <Input
+                    id={`${c.key}-since`}
+                    value={c.since}
+                    placeholder="e.g. 2015 or about 1990"
+                    onChange={(e) => update(partners, setPartners, c.key, { since: e.target.value })}
                   />
                 </Field>
                 <PersonForm value={c.draft} onChange={(d) => update(partners, setPartners, c.key, { draft: d })} errors={cardErrors(c.key)} />
@@ -346,7 +470,18 @@ function Wizard() {
             ))}
             <Button
               className="self-start"
-              onClick={() => setPartners([...partners, { key: nextKey("partner"), draft: emptyDraft(), kind: "marriage", status: "current" }])}
+              onClick={() =>
+                setPartners([
+                  ...partners,
+                  {
+                    key: nextKey("partner"),
+                    draft: emptyDraft({ gender: anchor.gender === "male" ? "female" : anchor.gender === "female" ? "male" : "unknown" }),
+                    kind: "marriage",
+                    status: "current",
+                    since: "",
+                  },
+                ])
+              }
             >
               <Plus size={15} /> Add a partner
             </Button>
@@ -364,12 +499,26 @@ function Wizard() {
                 <Field label="Other parent">
                   <Segmented
                     label="Other parent"
-                    value={c.otherParent}
-                    onChange={(otherParent) => update(children, setChildren, c.key, { otherParent })}
+                    value={c.otherParent || null}
+                    onChange={(otherParent) =>
+                      update(children, setChildren, c.key, {
+                        otherParent,
+                        // Keep the family name in step with the other parent unless it was typed.
+                        draft:
+                          c.draft.familyName === childFamilyName(c.otherParent)
+                            ? { ...c.draft, familyName: childFamilyName(otherParent) }
+                            : c.draft,
+                      })
+                    }
                     options={partnerOptions}
                   />
                 </Field>
-                <PersonForm value={c.draft} onChange={(d) => update(children, setChildren, c.key, { draft: d })} errors={cardErrors(c.key)} />
+                <PersonForm
+                  value={c.draft}
+                  onChange={(d) => update(children, setChildren, c.key, { draft: d })}
+                  errors={cardErrors(c.key)}
+                  phoneOptional
+                />
               </CardShell>
             ))}
             <Button
@@ -379,8 +528,8 @@ function Wizard() {
                   ...children,
                   {
                     key: nextKey("child"),
-                    draft: emptyDraft({ familyName: anchor.familyName ?? "" }),
-                    otherParent: partnerOptions.length === 2 ? partnerOptions[0].value : "none",
+                    draft: emptyDraft({ familyName: defaultOtherParent ? childFamilyName(defaultOtherParent) : (anchor.familyName ?? "") }),
+                    otherParent: defaultOtherParent,
                   },
                 ])
               }
@@ -429,11 +578,21 @@ function Wizard() {
               <ul className="flex flex-col divide-y divide-rule rounded-lg border border-rule bg-surface">
                 {allCards().map((c) => {
                   const m = matches[c.key];
+                  const d = describe(c);
                   return (
                     <li key={c.key} className="flex flex-col gap-2 px-4 py-3">
-                      <span className="font-serif text-[15px] font-medium">
-                        {[c.draft.givenName, c.draft.familyName].filter(Boolean).join(" ")}
-                      </span>
+                      <div className="flex items-start gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-serif text-[15px] font-medium">
+                            {[c.draft.givenName, c.draft.familyName].filter(Boolean).join(" ")}
+                          </p>
+                          <p className="text-[13px] text-ink">{d.relation}</p>
+                          {d.details && <p className="text-[12.5px] text-ink-muted tabular-nums">{d.details}</p>}
+                        </div>
+                        <button type="button" className="text-[13px] font-medium text-accent" onClick={() => setStep(d.step)}>
+                          Edit
+                        </button>
+                      </div>
                       {m && (
                         <div className="flex flex-col gap-2 rounded-md bg-ground px-3 py-2 text-[13px]">
                           <span>
@@ -465,7 +624,7 @@ function Wizard() {
       <div className="fixed inset-x-0 bottom-0 border-t border-rule bg-surface">
         <div className="mx-auto flex w-full max-w-xl items-center gap-2 px-4 py-3">
           {step > 0 && <Button onClick={() => setStep(step - 1)}>Back</Button>}
-          <button type="button" className="px-2 text-[14px] text-ink-muted" onClick={() => router.push(`/s/${spaceId}?focus=${anchorId}`)}>
+          <button type="button" className="px-2 text-[14px] text-ink-muted" onClick={skipToTree}>
             Skip to the tree
           </button>
           <span className="flex-1" />

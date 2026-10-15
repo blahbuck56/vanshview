@@ -39,12 +39,21 @@ What Vanshview must get right, and where each case is checked. Three layers, all
 - Removing a wrongly added parent frees the slot for the right one; removed people vanish from search.
 - Your own (claimed) profile can't be removed.
 
+**Details from entering a 6-generation family by hand** (`e2e/details.spec.ts`, `supabase/tests/07*`)
+- A new child's other parent follows the partner list even when the form opens mid-refresh, and defaults to the current partner, never an ex.
+- Gender is asked on every form (known from the role for mothers and fathers), so labels read son/daughter, husband/wife.
+- The guide asks how the parents are related, records a partner's marriage year, marks a widowed partner as passed away, and shows a real review (relationship, years, place, Edit) before saving; skipping warns first.
+- Family name at birth: shown as "née", searchable, editable and clearable.
+- Your own form has no "Passed away"/"Under 18" and says your phone is needed; a child's phone is optional.
+- Errors scroll into view.
+
 **Tree view** (`e2e/tree.spec.ts`)
+- Shows aunts, uncles and cousins around you, not just your direct line.
 - Opens on you, marked YOU. Click selects, double-click re-centres, the link keeps the person on reload.
 - Half and step siblings derived correctly on the sample family.
 - Generations up/down change how much is drawn.
 - A link to someone outside the family falls back to you.
-- Phones: person view first, tree one tap away, header doesn't overlap.
+- Phones: slim header with search behind an icon, person view first, tree one tap away.
 
 **Members, invites, roles, privacy** (`e2e/members.spec.ts`, `supabase/tests/04*`)
 - Invite link (with WhatsApp share) → sign in → join with the right role → "Which one is you?" → "This is me" (fills your phone) → guide works.

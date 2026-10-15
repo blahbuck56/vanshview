@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { parentChildKinds, unionEndReasons, unionKinds } from "./enums";
+import { FuzzyDateSchema } from "./fuzzy-date";
 import { personFieldsSchema } from "./person";
 
 /**
@@ -49,6 +50,7 @@ export const SubmissionPayloadSchema = z
           member_temp_ids: z.tuple([TempIdSchema, TempIdSchema]),
           kind: z.enum(unionKinds).default("marriage"),
           end_reason: z.enum(unionEndReasons).optional(),
+          start: FuzzyDateSchema.nullish(),
         }),
       )
       .default([]),

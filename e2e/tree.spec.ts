@@ -53,14 +53,25 @@ test("a link to someone outside this family falls back to you", async ({ page })
   await expect(panel(page).getByRole("heading", { name: "Arjun Malhotra" })).toBeVisible();
 });
 
-test("phones: person view first, tree one tap away, header does not overlap @mobile", async ({ page }) => {
+test("phones: slim header, person view first, tree one tap away, search from an icon @mobile", async ({ page }) => {
   await signIn(page, SEED.editor);
   await expect(page.getByRole("heading", { name: "Tanvi Malhotra" })).toBeVisible();
   await expect(page.getByRole("button", { name: /Rohan Mehra/ })).toBeVisible();
 
-  const search = await page.getByPlaceholder("Find anyone in the family").boundingBox();
-  const nav = await page.getByRole("navigation", { name: "Main" }).boundingBox();
-  expect(search && nav && (search.y >= nav.y + nav.height || search.y + search.height <= nav.y)).toBeTruthy();
+  // Header plus the Person/Tree switch stay under a sixth of a phone screen.
+  const header = (await page.getByRole("banner").boundingBox())!;
+  const toggle = (await page.getByRole("radiogroup", { name: "View" }).boundingBox())!;
+  expect(toggle.y + toggle.height).toBeLessThan(page.viewportSize()!.height / 6 + 10);
+  expect(header.height).toBeLessThan(100);
+
+  await page.getByRole("button", { name: "Find someone" }).click();
+  await page.getByPlaceholder("Find anyone in the family").fill("Rohan");
+  await page.getByRole("banner").getByRole("button", { name: /Rohan Mehra/ }).click();
+  await expect(page.getByRole("heading", { name: "Rohan Mehra" })).toBeVisible();
+  await expect(page.getByPlaceholder("Find anyone in the family")).toBeHidden();
+  await page.getByRole("button", { name: "Find someone" }).click();
+  await page.getByPlaceholder("Find anyone in the family").fill("Tanvi");
+  await page.getByRole("banner").getByRole("button", { name: /Tanvi Malhotra/ }).click();
 
   await page.getByRole("radio", { name: "Tree" }).click();
   await expect(page.locator(".react-flow__node-person").first()).toBeVisible();

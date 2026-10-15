@@ -1,6 +1,6 @@
 "use client";
 
-import { LogOut, Search } from "lucide-react";
+import { LogOut, Search, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -23,6 +23,8 @@ export function AppHeader({
   const [q, setQ] = useState("");
   const [results, setResults] = useState<Person[]>([]);
   const [open, setOpen] = useState(false);
+  // Phones: search is an icon that opens a search bar over the top row.
+  const [searching, setSearching] = useState(false);
   const current = memberships.find((m) => m.spaceId === spaceId);
 
   useEffect(() => {
@@ -45,7 +47,7 @@ export function AppHeader({
     <Link
       href={href}
       className={cn(
-        "px-2.5 py-2.5 text-[14px] whitespace-nowrap md:py-4",
+        "px-2.5 py-2 text-[14px] whitespace-nowrap md:py-4",
         active === key ? "border-b-2 border-ink font-medium text-ink" : "text-ink-muted hover:text-ink",
       )}
     >
@@ -55,8 +57,8 @@ export function AppHeader({
 
   return (
     <header className="sticky top-0 z-30 border-b border-rule bg-surface">
-      {/* Phones: brand + sign-out, then tabs, then search. Desktop: one 56px row. */}
-      <div className="flex flex-wrap items-center gap-x-4 px-4 md:h-14 md:flex-nowrap md:px-5">
+      {/* Phones: brand, family, search icon and sign-out on one row, tabs below. Desktop: one 56px row. */}
+      <div className="relative flex flex-wrap items-center gap-x-2 px-4 md:h-14 md:flex-nowrap md:gap-x-4 md:px-5">
         <div className="order-1 flex h-12 min-w-0 flex-1 items-center gap-3 md:h-auto md:flex-none">
           <Link href="/" className="shrink-0 font-serif text-[18px] font-semibold tracking-tight">
             Vanshview
@@ -77,6 +79,17 @@ export function AppHeader({
           </select>
         </div>
 
+        {onPickPerson && (
+          <button
+            type="button"
+            aria-label="Find someone"
+            onClick={() => setSearching(true)}
+            className="order-2 rounded-md p-2 text-ink-muted hover:bg-ground md:hidden"
+          >
+            <Search size={18} />
+          </button>
+        )}
+
         <button
           type="button"
           aria-label="Sign out"
@@ -93,8 +106,13 @@ export function AppHeader({
         </nav>
 
         {onPickPerson ? (
-          <div className="relative order-4 w-full pb-2.5 md:order-2 md:w-auto md:max-w-sm md:flex-1 md:pb-0">
-            <label className="flex h-9 items-center gap-2 rounded-md border border-rule bg-ground px-2.5 text-ink-muted">
+          <div
+            className={cn(
+              searching ? "absolute inset-x-0 top-0 z-40 flex h-12 items-center gap-2 bg-surface px-4" : "hidden",
+              "md:relative md:order-2 md:flex md:h-auto md:max-w-sm md:flex-1 md:px-0",
+            )}
+          >
+            <label className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-md border border-rule bg-ground px-2.5 text-ink-muted">
               <Search size={16} />
               <span className="sr-only">Find someone</span>
               <input
@@ -106,13 +124,25 @@ export function AppHeader({
                 onFocus={() => setOpen(true)}
                 // Let a click on a result land before the list closes.
                 onBlur={() => setTimeout(() => setOpen(false), 150)}
+                autoFocus={searching}
                 onKeyDown={(e) => e.key === "Escape" && setOpen(false)}
                 placeholder="Find anyone in the family"
                 className="min-w-0 flex-1 bg-transparent text-[14px] text-ink outline-none placeholder:text-ink-muted"
               />
             </label>
+            <button
+              type="button"
+              aria-label="Close search"
+              onClick={() => {
+                setSearching(false);
+                setQ("");
+              }}
+              className="rounded-md p-2 text-ink-muted hover:bg-ground md:hidden"
+            >
+              <X size={18} />
+            </button>
             {open && results.length > 0 && (
-              <div className="absolute inset-x-0 top-full z-40 mt-1 overflow-hidden rounded-md border border-rule bg-surface shadow-[0_6px_20px_rgba(22,24,27,0.1)]">
+              <div className="absolute inset-x-4 top-full z-40 mt-1 overflow-hidden rounded-md border border-rule bg-surface shadow-[0_6px_20px_rgba(22,24,27,0.1)] md:inset-x-0">
                 {results.map((p) => (
                   <button
                     key={p.id}
@@ -120,6 +150,7 @@ export function AppHeader({
                     onClick={() => {
                       onPickPerson(p.id);
                       setQ("");
+                      setSearching(false);
                     }}
                     className="flex w-full items-baseline justify-between gap-3 px-3 py-2.5 text-left hover:bg-ground"
                   >

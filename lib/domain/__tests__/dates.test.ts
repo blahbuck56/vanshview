@@ -86,6 +86,6 @@ describe("formatting", () => {
     expect(formatLifespan(y(1932, "about"), y(2009), true)).toBe("~1932–2009");
     expect(formatLifespan(y(1991), null, false)).toBe("b. 1991");
     expect(formatLifespan(null, y(2001), true)).toBe("d. 2001");
-    expect(formatLifespan(null, null, true)).toBe("");
+    expect(formatLifespan(null, null, true)).toBe("Passed away");
   });
 });

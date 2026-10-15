@@ -35,6 +35,8 @@ export const LinkSchema = z.object({
 const basePersonFields = z.object({
   given_name: z.string().trim().max(100).optional(),
   family_name: z.string().trim().max(100).nullish(),
+  // Family name at birth when it differs (e.g. before marriage); null clears it.
+  birth_family_name: z.string().trim().max(100).nullish(),
   gender: z.enum(genders).default("unknown"),
   birth: FuzzyDateSchema.nullish(),
   death: FuzzyDateSchema.nullish(),
@@ -85,7 +87,7 @@ export function personFieldsSchema(opts: { allowAskLater: boolean; today?: Date 
         opts.today,
       );
       if (!p.is_deceased && !minor && !p.phone) {
-        if (p.phone_status === "requested" && !opts.allowAskLater) {
+        if (!opts.allowAskLater) {
           ctx.addIssue({ code: "custom", path: ["phone"], message: "phone.required_for_self" });
         } else if (p.phone_status !== "requested") {
           ctx.addIssue({ code: "custom", path: ["phone"], message: "phone.required" });

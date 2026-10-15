@@ -14,8 +14,8 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import ELK from "elkjs/lib/elk.bundled.js";
-import { memo, useEffect, useMemo, useState } from "react";
-import { displayName, type Neighborhood, type Person } from "@/lib/data/family";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { bornAs, displayName, type Neighborhood, type Person } from "@/lib/data/family";
 import { formatLifespan } from "@/lib/domain/dates";
 import { cn } from "@/lib/utils";
 
@@ -58,7 +58,7 @@ const PersonNode = memo(function PersonNode({ data }: NodeProps<Node<PersonData>
         <span className="truncate text-[11.5px] leading-4 text-ink-muted tabular-nums">
           {p.isPlaceholder
             ? "Tap to fill in"
-            : [formatLifespan(p.birth, p.death, p.isDeceased), p.place?.split(",")[0]].filter(Boolean).join(" · ")}
+            : [bornAs(p), formatLifespan(p.birth, p.death, p.isDeceased), p.place?.split(",")[0]].filter(Boolean).join(" · ")}
         </span>
         <Handle type="source" position={Position.Bottom} className="!opacity-0" />
       </div>
@@ -165,7 +165,7 @@ async function layout(data: Neighborhood) {
       selectable: false,
     })),
   ];
-  return { nodes, edges };
+  return { nodes, edges, focusId: data.focusId };
 }
 
 function Canvas({
@@ -183,7 +183,8 @@ function Canvas({
   onSelect: (id: string) => void;
   onFocus: (id: string) => void;
 }) {
-  const [graph, setGraph] = useState<{ nodes: Node[]; edges: Edge[] } | null>(null);
+  const [graph, setGraph] = useState<{ nodes: Node[]; edges: Edge[]; focusId: string } | null>(null);
+  const centredOn = useRef<string | null>(null);
   const flow = useReactFlow();
 
   // Layout depends only on the data; selection and focus just restyle nodes (no re-layout, so a
@@ -208,15 +209,18 @@ function Canvas({
     [graph, focusId, meId, selectedId],
   );
 
-  // Centre on the focus person whenever the focus changes.
+  // Centre on the focus person whenever the focus changes, once the tree around them is laid
+  // out (the previous tree may also contain them, at a position about to change). Reloads
+  // around the same person (after adding someone) keep the view where it is.
   useEffect(() => {
-    if (!graph) return;
+    if (!graph || graph.focusId !== focusId || centredOn.current === focusId) return;
+    centredOn.current = focusId;
     const focus = graph.nodes.find((n) => n.id === focusId);
     // Phones start a little zoomed out so parents and children fit around the person.
     const zoom = window.innerWidth < 768 ? 0.75 : 1;
     if (focus) flow.setCenter(focus.position.x + PERSON_W / 2, focus.position.y + PERSON_H / 2, { zoom, duration: 300 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focusId, graph === null]);
+  }, [focusId, graph]);
 
   if (!graph) return null;
   return (

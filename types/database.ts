@@ -1303,6 +1303,7 @@ export type Database = {
       remove_person: { Args: { p_person_id: string }; Returns: undefined };
       replace_placeholder_parent: { Args: { p_child: string; p_parent: string }; Returns: string };
       resolve_person: { Args: { p_existing: string; p_new: Json; p_space_id: string }; Returns: string };
+      set_birth_family_name: { Args: { p_name: string; p_person_id: string }; Returns: undefined };
       siblings: {
         Args: { p_person_id: string };
         Returns: {

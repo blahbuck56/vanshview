@@ -1,14 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NameSearch } from "@/components/name-search";
 import { PersonForm } from "@/components/person-form";
-import { Button, ErrorNote, Field, Input, Segmented, Sheet } from "@/components/ui";
+import { Button, ErrorNote, Field, Input, Segmented, Sheet, scrollToFirstError } from "@/components/ui";
 import { displayName, errorMessage, firstName, subtitle, type Person, type Relatives } from "@/lib/data/family";
 import { parseFuzzyDate } from "@/lib/domain/dates";
 import { t } from "@/lib/i18n/en";
 import { draftToPayload, emptyDraft, type DraftErrors, type PersonDraft } from "@/lib/person-draft";
 import { createClient } from "@/lib/supabase/client";
+import { defaultOtherParent } from "@/lib/domain/relatives";
 
 export type RelativeKind = "parent" | "partner" | "child" | "sibling";
 
@@ -16,6 +17,7 @@ type Pick = { existing: Person } | { draft: PersonDraft } | null;
 type ParentKind = "biological" | "adoptive" | "step" | "guardian";
 
 const BIRTH_KINDS = new Set(["biological", "adoptive", "unknown"]);
+
 
 export function AddRelativeSheet({
   kind,
@@ -49,10 +51,21 @@ export function AddRelativeSheet({
   const birthSlotsFull = knownBirthParents.length >= 2;
   const [couple, setCouple] = useState<"married" | "partners" | "no" | "unknown">("married");
 
-  // Child
-  const [otherParentId, setOtherParentId] = useState<string | null>(
-    relatives.partners.length === 1 ? relatives.partners[0].person.id : relatives.partners.length === 0 ? "none" : null,
-  );
+  // Child. The sheet can open while the relatives list is still refreshing (e.g. right after
+  // adding a partner), so the default follows the list until the person picks one themselves.
+  const [otherParentId, setOtherParentId] = useState<string | null>(defaultOtherParent(relatives.partners));
+  const otherParentPicked = useRef(false);
+  const partnerKey = relatives.partners.map((p) => `${p.person.id}:${p.union.endReason ?? ""}`).join(",");
+  useEffect(() => {
+    if (!otherParentPicked.current) setOtherParentId(defaultOtherParent(relatives.partners));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [partnerKey]);
+  // A child usually takes the father's family name.
+  const childFamilyName = (other: string | null) => {
+    const partner = relatives.partners.find((p) => p.person.id === other)?.person;
+    if (partner && anchor.gender === "female" && partner.gender === "male" && partner.familyName) return partner.familyName;
+    return anchor.familyName ?? "";
+  };
   const [childKind, setChildKind] = useState<ParentKind>("biological");
 
   // Partner
@@ -82,9 +95,10 @@ export function AddRelativeSheet({
     if ("existing" in pick) p_existing = pick.existing.id;
     else {
       const draft = kind === "parent" && parentRole ? { ...pick.draft, gender: parentRole === "mother" ? "female" : "male" } as const : pick.draft;
-      const parsed = draftToPayload(draft, { allowAskLater: true });
+      const parsed = draftToPayload(draft, { allowAskLater: true, phoneOptional: kind === "child" });
       if (!parsed.ok) {
         setErrors(parsed.errors);
+        scrollToFirstError();
         return;
       }
       setErrors({});
@@ -98,11 +112,13 @@ export function AddRelativeSheet({
       if (!parentRole) {
         setBusy(false);
         setError("Choose whether you're adding a mother or a father.");
+        scrollToFirstError();
         return;
       }
       if (birthSlotsFull && BIRTH_KINDS.has(parentKind)) {
         setBusy(false);
         setError(`${name} already has two parents in the tree. Choose step-parent or guardian, or edit the existing parent.`);
+        scrollToFirstError();
         return;
       }
       result = await db.rpc("add_parent", {
@@ -117,6 +133,7 @@ export function AddRelativeSheet({
       if (otherParentId === null) {
         setBusy(false);
         setError("Choose who the other parent is.");
+        scrollToFirstError();
         return;
       }
       result = await db.rpc("add_child", {
@@ -150,7 +167,10 @@ export function AddRelativeSheet({
       });
     }
     setBusy(false);
-    if (result.error) setError(errorMessage(result.error));
+    if (result.error) {
+      setError(errorMessage(result.error));
+      scrollToFirstError();
+    }
     else {
       const newName = pick && "existing" in pick ? displayName(pick.existing) : pick && "draft" in pick ? pick.draft.givenName : "";
       onDone(result.data as string, newName);
@@ -195,10 +215,19 @@ export function AddRelativeSheet({
 
         {!pick && <NameSearch spaceId={spaceId} excludeIds={existingIds} onPickExisting={(p) => setPick({ existing: p })} onPickNew={(n) => {
           const words = n.split(/\s+/);
+          const opposite = anchor.gender === "male" ? "female" : anchor.gender === "female" ? "male" : "unknown";
           setPick({
             draft: emptyDraft({
               givenName: words.length > 1 ? words.slice(0, -1).join(" ") : n,
-              familyName: words.length > 1 ? words.at(-1)! : (kind === "child" || kind === "sibling" ? (anchor.familyName ?? "") : ""),
+              familyName:
+                words.length > 1
+                  ? words.at(-1)!
+                  : kind === "child"
+                    ? childFamilyName(otherParentId)
+                    : kind === "sibling"
+                      ? (anchor.familyName ?? "")
+                      : "",
+              gender: kind === "partner" ? opposite : "unknown",
             }),
           });
         }} />}
@@ -217,7 +246,13 @@ export function AddRelativeSheet({
 
         {pick && "draft" in pick && (
           <div className="flex flex-col gap-3">
-            <PersonForm value={pick.draft} onChange={(d) => setPick({ draft: d })} errors={errors} />
+            <PersonForm
+              value={pick.draft}
+              onChange={(d) => setPick({ draft: d })}
+              errors={errors}
+              showGender={kind !== "parent"}
+              phoneOptional={kind === "child"}
+            />
             <button type="button" className="self-start text-[13px] font-medium text-accent" onClick={() => setPick(null)}>
               Search again instead
             </button>
@@ -264,7 +299,13 @@ export function AddRelativeSheet({
                 <Segmented
                   label="Other parent"
                   value={otherParentId}
-                  onChange={setOtherParentId}
+                  onChange={(id) => {
+                    otherParentPicked.current = true;
+                    if (pick && "draft" in pick && pick.draft.familyName === childFamilyName(otherParentId)) {
+                      setPick({ draft: { ...pick.draft, familyName: childFamilyName(id) } });
+                    }
+                    setOtherParentId(id);
+                  }}
                   options={[
                     ...relatives.partners.map((r) => ({ value: r.person.id, label: displayName(r.person) })),
                     { value: "none", label: "Someone else / unknown" },
@@ -304,7 +345,13 @@ export function AddRelativeSheet({
               <Segmented
                 label="Status"
                 value={status}
-                onChange={setStatus}
+                onChange={(s) => {
+                  setStatus(s);
+                  // Widowed means this partner has passed away.
+                  if (pick && "draft" in pick && (s === "death") !== !pick.draft.living) {
+                    setPick({ draft: { ...pick.draft, living: s !== "death", phone: s === "death" ? "" : pick.draft.phone } });
+                  }
+                }}
                 options={[
                   { value: "current", label: "Together" },
                   { value: "divorce", label: "Divorced" },

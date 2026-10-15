@@ -205,7 +205,7 @@ function FamilyTree() {
         </div>
       )}
 
-      <div className="flex items-center gap-2 border-b border-rule bg-surface px-4 py-2 md:hidden">
+      <div className="flex items-center gap-2 border-b border-rule bg-surface px-4 py-1.5 md:hidden">
         <Segmented
           label="View"
           value={mobileView}

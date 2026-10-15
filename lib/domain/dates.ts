@@ -202,5 +202,5 @@ export function formatLifespan(
   if (b && d) return `${b}–${d}`;
   if (b) return `${b}–`;
   if (d) return `d. ${d}`;
-  return "";
+  return "Passed away";
 }
