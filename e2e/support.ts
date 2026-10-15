@@ -46,7 +46,7 @@ const clients = new Map<string, SupabaseClient<Database>>();
 export async function api(local: string): Promise<SupabaseClient<Database>> {
   const cached = clients.get(local);
   if (cached) return cached;
-  const db = createClient<Database>(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false } });
+  const db = createClient<Database>(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
   const phone = e164(local);
   for (let attempt = 0; ; attempt++) {
     const sent = await db.auth.signInWithOtp({ phone });
