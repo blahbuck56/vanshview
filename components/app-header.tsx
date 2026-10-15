@@ -3,7 +3,7 @@
 import { LogOut, Search, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { displayName, searchPeople, subtitle, type Membership, type Person } from "@/lib/data/family";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
@@ -23,6 +23,12 @@ export function AppHeader({
   const [q, setQ] = useState("");
   const [results, setResults] = useState<Person[]>([]);
   const [open, setOpen] = useState(false);
+  // Closing on blur waits a moment so a tap on a result lands; typing again cancels it.
+  const closeTimer = useRef<number | undefined>(undefined);
+  const openList = () => {
+    window.clearTimeout(closeTimer.current);
+    setOpen(true);
+  };
   // Phones: search is an icon that opens a search bar over the top row.
   const [searching, setSearching] = useState(false);
   const current = memberships.find((m) => m.spaceId === spaceId);
@@ -119,11 +125,12 @@ export function AppHeader({
                 value={q}
                 onChange={(e) => {
                   setQ(e.target.value);
-                  setOpen(true);
+                  openList();
                 }}
-                onFocus={() => setOpen(true)}
-                // Let a click on a result land before the list closes.
-                onBlur={() => setTimeout(() => setOpen(false), 150)}
+                onFocus={openList}
+                onBlur={() => {
+                  closeTimer.current = window.setTimeout(() => setOpen(false), 150);
+                }}
                 autoFocus={searching}
                 onKeyDown={(e) => e.key === "Escape" && setOpen(false)}
                 placeholder="Find anyone in the family"
