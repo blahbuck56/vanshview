@@ -23,11 +23,18 @@ const e164 = (local: string) => `+91${local.replace(/\D/g, "")}`;
 export async function signIn(page: Page, local: string) {
   await page.goto("/login");
   await page.getByLabel("Phone number").fill(local);
-  // One code per number per second: if the suite just used this number, wait and ask again.
-  await expect(async () => {
+  // One code per number per second (locally): if the suite just used this number, wait and ask again.
+  const code = page.getByLabel("6-digit code");
+  for (let attempt = 0; ; attempt++) {
     await page.getByRole("button", { name: "Send code" }).click();
-    await expect(page.getByLabel("6-digit code")).toBeVisible({ timeout: 1500 });
-  }).toPass({ timeout: 15_000 });
+    try {
+      await expect(code).toBeVisible({ timeout: 10_000 });
+      break;
+    } catch (e) {
+      if (attempt >= 5 || !(await page.getByText(/Please wait/).isVisible())) throw e;
+      await page.waitForTimeout(1500);
+    }
+  }
   await page.getByLabel("6-digit code").fill("123456");
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   await expect(page).not.toHaveURL(/\/login/);
