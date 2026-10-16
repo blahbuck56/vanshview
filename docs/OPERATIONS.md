@@ -57,6 +57,8 @@ Vercel → project → Analytics → Enable. No cookies. Counts only.
 | --- | --- |
 | Sentry error reports | 16 Oct 2026, test error delivered |
 | Supabase policy speed-ups | 16 Oct 2026, verified on the hosted database |
+| Vercel Analytics | 16 Oct 2026 |
+| UptimeRobot on /api/health, every 5 min, email alerts | 16 Oct 2026 |
 
 ## What runs automatically
 
