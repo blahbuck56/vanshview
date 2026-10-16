@@ -25,6 +25,8 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: No known high-severity vulnerabilities in what ships to users
+        run: pnpm audit --prod --audit-level high
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test

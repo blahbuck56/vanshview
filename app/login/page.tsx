@@ -1,11 +1,15 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useRef, useState } from "react";
+import { Turnstile, type TurnstileHandle } from "@/components/turnstile";
 import { Button, ErrorNote, Field, Input } from "@/components/ui";
 import { normalizePhone } from "@/lib/domain/phone";
 import { createClient } from "@/lib/supabase/client";
-import { safeNext } from "@/lib/utils";
+import { sendCodeError, safeNext } from "@/lib/utils";
+
+// Set in production to require the Turnstile check before a code is sent (see docs/OPERATIONS.md).
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
 function LoginForm() {
   const router = useRouter();
@@ -15,6 +19,9 @@ function LoginForm() {
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const turnstile = useRef<TurnstileHandle>(null);
+  const waitingForCheck = Boolean(TURNSTILE_SITE_KEY) && !captchaToken;
 
   async function sendCode(e: React.FormEvent) {
     e.preventDefault();
@@ -25,9 +32,13 @@ function LoginForm() {
       return;
     }
     setBusy(true);
-    const { error } = await createClient().auth.signInWithOtp({ phone: parsed.e164 });
+    const { error } = await createClient().auth.signInWithOtp({
+      phone: parsed.e164,
+      options: captchaToken ? { captchaToken } : undefined,
+    });
     setBusy(false);
-    if (error) setError(/rate|security purposes|seconds/i.test(error.message) ? "Please wait a few seconds before asking for another code." : "We couldn't send a code to that number. Check it and try again.");
+    turnstile.current?.reset(); // each check token works once
+    if (error) setError(sendCodeError(error.message));
     else {
       setCode("");
       setPhone(parsed.e164);
@@ -69,9 +80,10 @@ function LoginForm() {
               autoFocus
             />
           </Field>
+          {TURNSTILE_SITE_KEY && <Turnstile ref={turnstile} siteKey={TURNSTILE_SITE_KEY} onToken={setCaptchaToken} />}
           <ErrorNote message={error} />
-          <Button variant="primary" type="submit" disabled={busy || !phoneInput.trim()} className="h-12">
-            {busy ? "Sending…" : "Send code"}
+          <Button variant="primary" type="submit" disabled={busy || !phoneInput.trim() || waitingForCheck} className="h-12">
+            {busy ? "Sending…" : waitingForCheck ? "Checking you're not a robot…" : "Send code"}
           </Button>
         </form>
       ) : (

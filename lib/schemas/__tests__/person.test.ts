@@ -70,3 +70,36 @@ describe("spec 3a required fields", () => {
     ).toBe(false);
   });
 });
+
+describe("names from every family", () => {
+  const ok = (given: string, family?: string) =>
+    schema.safeParse({ given_name: given, family_name: family, location: where, phone: "+919876500001" });
+
+  it("accepts apostrophes, hyphens, Devanagari, Gurmukhi, Urdu, accents and emoji", () => {
+    for (const [given, family] of [
+      ["Rose", "D'Souza"],
+      ["Mary", "D’Souza"],
+      ["Anne-Marie", "Fernandes-Rao"],
+      ["नीलम", "मल्होत्रा"],
+      ["ਗੁਰਪ੍ਰੀਤ", "ਸਿੰਘ"],
+      ["زینب", "خان"],
+      ["José", "Gonçalves"],
+      ["Baby 🌸", undefined],
+    ] as const) {
+      const r = ok(given, family);
+      expect(r.success, `${given} ${family ?? ""}`).toBe(true);
+      expect(r.data?.given_name).toBe(given);
+    }
+  });
+
+  it("stores one form of each letter, whichever keyboard typed it", () => {
+    const decomposed = "José"; // e + combining accent, as macOS can send it
+    expect(ok(decomposed).data?.given_name).toBe("José");
+  });
+
+  it("trims spaces but keeps a 100-character limit in characters", () => {
+    expect(ok("  Kabir  ").data?.given_name).toBe("Kabir");
+    expect(ok("न".repeat(100)).success).toBe(true);
+    expect(ok("न".repeat(101)).success).toBe(false);
+  });
+});

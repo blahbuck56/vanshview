@@ -33,10 +33,10 @@ export const LinkSchema = z.object({
 });
 
 const basePersonFields = z.object({
-  given_name: z.string().trim().max(100).optional(),
-  family_name: z.string().trim().max(100).nullish(),
+  given_name: z.string().trim().normalize().max(100).optional(),
+  family_name: z.string().trim().normalize().max(100).nullish(),
   // Family name at birth when it differs (e.g. before marriage); null clears it.
-  birth_family_name: z.string().trim().max(100).nullish(),
+  birth_family_name: z.string().trim().normalize().max(100).nullish(),
   gender: z.enum(genders).default("unknown"),
   birth: FuzzyDateSchema.nullish(),
   death: FuzzyDateSchema.nullish(),

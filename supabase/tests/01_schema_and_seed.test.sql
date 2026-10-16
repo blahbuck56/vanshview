@@ -29,9 +29,9 @@ select is(
   0, 'every space-owned table (except saved_views) writes to change_log');
 
 select is(
-  (select count(*)::int from pg_proc p
+  (select array_agg(p.proname::text) from pg_proc p
    where p.pronamespace = 'public'::regnamespace and has_function_privilege('anon', p.oid, 'execute')),
-  0, 'anon cannot execute any public function');
+  array['health'], 'anon can execute only the uptime check, nothing that reads data');
 
 select ok(
   not has_function_privilege('authenticated', 'public.refresh_minor_flags()', 'execute')

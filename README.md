@@ -4,6 +4,7 @@ Private, collaborative family trees. Members of a family space build one shared 
 
 - Product and build spec: [`docs/SPEC.md`](docs/SPEC.md)
 - Design direction and user flows: [`docs/DESIGN.md`](docs/DESIGN.md)
+- Running it: settings, monitoring, security, releases: [`docs/OPERATIONS.md`](docs/OPERATIONS.md)
 
 ## Stack
 
@@ -34,12 +35,12 @@ Seed users sign in with phone OTP `123456` (local only, see `supabase/config.tom
 | `pnpm test` | Vitest: fuzzy dates, phone normalisation, minor status, Zod person rules, SubmissionPayload contract (including the seed's payloads) |
 | `pnpm supabase test db` | pgTAP against the Supabase stack: schema and seed shape, integrity rules, derived queries, RLS per role |
 | `pnpm db:test:local` | Same pgTAP suite against plain Postgres 15+ without Docker (`scripts/db-test-local.sh`; needs `pgtap` and `pg_prove`) |
-| `pnpm e2e` | Playwright: 26 real-browser journeys (sign-in, onboarding wizard, add/link/edit/remove relatives, tree, invites, roles, privacy) against a local Supabase. Run `pnpm supabase start` and `pnpm supabase db reset` first; it starts the app if needed |
+| `pnpm e2e` | Playwright: 34 real-browser journeys (sign-in, onboarding wizard, add/link/edit/remove relatives, tree, invites, roles, privacy, security headers, names in any script) against a local Supabase. Run `pnpm supabase start` and `pnpm supabase db reset` first; it starts the app if needed |
 | `pnpm db:types` | Regenerates `types/database.ts` from the database (CI fails if it is stale) |
 
 Every case and where it is checked: [docs/TEST_PLAN.md](docs/TEST_PLAN.md). Locally, phone sign-in needs `SUPABASE_AUTH_SMS_TWILIO_AUTH_TOKEN` set to any value (test numbers never send an SMS).
 
-CI (`.github/workflows/ci.yml`) runs lint, typecheck, unit tests and a production build; starts Supabase, runs `supabase db reset`, the pgTAP suite, `supabase db lint`, and checks the generated types; and runs the Playwright suite against a local Supabase and a production build.
+CI (`.github/workflows/ci.yml`) runs a dependency audit, lint, typecheck, unit tests and a production build; starts Supabase, runs `supabase db reset`, the pgTAP suite, `supabase db lint`, and checks the generated types; and runs the Playwright suite against a local Supabase and a production build.
 
 ## Database at a glance
 

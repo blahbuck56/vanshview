@@ -1285,6 +1285,7 @@ export type Database = {
       };
       get_invite: { Args: { p_token: string }; Returns: Json };
       has_role: { Args: { p_min: Database["public"]["Enums"]["member_role"]; p_space_id: string }; Returns: boolean };
+      health: { Args: Record<PropertyKey, never>; Returns: boolean };
       is_member: { Args: { p_space_id: string }; Returns: boolean };
       list_members: {
         Args: { p_space_id: string };

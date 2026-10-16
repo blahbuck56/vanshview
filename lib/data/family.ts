@@ -216,8 +216,27 @@ export async function loadRelatives(db: DB, personId: string): Promise<Relatives
   };
 }
 
+/**
+ * Splits a search into words safe to put inside a PostgREST `ilike` filter. Characters with a
+ * meaning there (`% _ * , ( ) " \`) are dropped, and any apostrophe becomes `_` (one-character
+ * wildcard) so "D'Souza" typed on Android finds "D’Souza" typed on an iPhone, and vice versa.
+ */
+export function searchWords(q: string): string[] {
+  return q
+    .normalize("NFC")
+    .trim()
+    .split(/\s+/)
+    .map((part) => part.replace(/[%_*,()"\\]/g, "").replace(/['’‘ʼ`´]/g, "_"))
+    .filter((part) => part.replace(/_/g, "").length > 0);
+}
+
+/** The client-side twin of an `ilike '%word%'` from searchWords: `_` matches any one character. */
+function likeToRegExp(word: string): RegExp {
+  return new RegExp(word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/_/g, "."), "i");
+}
+
 export async function searchPeople(db: DB, spaceId: string, q: string, limit = 8): Promise<Person[]> {
-  const parts = q.trim().split(/\s+/).map((part) => part.replace(/[%_,()]/g, "")).filter(Boolean);
+  const parts = searchWords(q);
   if (parts.length === 0) return [];
   let query = db.from("persons").select("id").eq("space_id", spaceId).is("deleted_at", null).eq("is_placeholder", false).limit(limit);
   for (const part of parts) query = query.or(`given_name.ilike.%${part}%,family_name.ilike.%${part}%`);
@@ -229,12 +248,12 @@ export async function searchPeople(db: DB, spaceId: string, q: string, limit = 8
   if (byName.error) throw byName.error;
   const ids = [...new Set([...(byName.data ?? []).map((r) => r.id), ...(byBirthName.data ?? []).map((r) => r.person_id)])];
   const people = await loadPeople(db, ids);
-  const first = parts.length > 1 ? parts[0].toLowerCase() : null;
+  const first = parts.length > 1 ? likeToRegExp(parts[0]) : null;
   return ids
     .map((id) => people.get(id))
     .filter((p): p is Person => Boolean(p) && !p!.isPlaceholder)
     // A birth-name match still has to match the first name typed, if one was.
-    .filter((p) => !first || (p.givenName ?? "").toLowerCase().includes(first) || (p.familyName ?? "").toLowerCase().includes(first))
+    .filter((p) => !first || first.test(p.givenName ?? "") || first.test(p.familyName ?? ""))
     .slice(0, limit);
 }
 

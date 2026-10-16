@@ -61,5 +61,12 @@ What Vanshview must get right, and where each case is checked. Three layers, all
 - Viewers can't change anything (buttons hidden and the database refuses). Editors can't manage members. Admins change roles and remove members, who lose access at once.
 - One person can be in several families and switch between them; nobody can open a family they're not in, even through the API.
 
+**Security and running it** (`e2e/hardening.spec.ts`, `supabase/tests/08*`, `lib/**/__tests__`)
+- Every page is sent with security headers; the content policy blocks nothing the app uses (sign-in, tree, search, members).
+- `/api/health` answers without signing in; signed-out callers still can't read any data, and `health()` is the only function they can run.
+- No RLS policy evaluates `auth.uid()` per row.
+- Names with apostrophes (straight or curly), Devanagari, Gurmukhi, Urdu, accents and emoji are saved as typed, shown, and found; "D'Souza" finds "D’Souza"; a name typed with a combining accent is stored in one form.
+- Error reports mask phone numbers; sign-in errors (wait, failed robot check, bad number) are explained.
+
 ## Not covered yet (features not built)
 Public intake form and review queue, hiding phone numbers and children's details from viewers, merge and undo, colour modes and map, photos, Hindi, GEDCOM.
